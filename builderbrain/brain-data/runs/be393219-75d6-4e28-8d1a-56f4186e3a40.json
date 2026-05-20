@@ -1,0 +1,26 @@
+{
+  "id": "be393219-75d6-4e28-8d1a-56f4186e3a40",
+  "timestamp": "2026-05-20T17:18:11.316Z",
+  "command": "context",
+  "input": "add JWT authentication to express middleware using jsonwebtoken",
+  "detectedDomains": [
+    "auth",
+    "backend",
+    "files"
+  ],
+  "booksUsed": [
+    "Before Coding Rules",
+    "Approval Rules",
+    "Memory Rules",
+    "Communication Style",
+    "Decision Style",
+    "Do Not Ask Rules",
+    "Solved Problems",
+    "Architecture Decisions",
+    "Security",
+    "Software Engineering"
+  ],
+  "risk": "Low",
+  "confidence": "High",
+  "summary": "Context pack built for: add JWT authentication to express middleware using jsonwebtoken"
+}

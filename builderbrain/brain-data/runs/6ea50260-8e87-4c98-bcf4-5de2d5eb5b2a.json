@@ -1,0 +1,23 @@
+{
+  "id": "6ea50260-8e87-4c98-bcf4-5de2d5eb5b2a",
+  "timestamp": "2026-05-20T17:18:14.666Z",
+  "command": "propose",
+  "input": "delete all user records from the postgres database",
+  "detectedDomains": [
+    "database"
+  ],
+  "booksUsed": [
+    "Before Coding Rules",
+    "Approval Rules",
+    "Memory Rules",
+    "Communication Style",
+    "Decision Style",
+    "Do Not Ask Rules",
+    "Solved Problems",
+    "Architecture Decisions",
+    "Software Engineering"
+  ],
+  "risk": "Critical",
+  "confidence": "High",
+  "summary": "Proposal generated for: delete all user records from the postgres database"
+}
