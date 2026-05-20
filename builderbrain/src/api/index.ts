@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { join } from 'path';
 import { readdirSync, existsSync, readFileSync } from 'fs';
 import { classifyDomains } from '../engines/classifier.js';
@@ -9,12 +10,28 @@ import { buildContextPack } from '../engines/contextPackBuilder.js';
 import { buildProposal } from '../engines/proposalEngine.js';
 import { saveLesson, hasPriorLessons } from '../memory/selfLearning.js';
 import { saveRunLog, listRunLogs, getRunLog } from '../logger.js';
+import { loadConfig, saveConfig } from '../config/manager.js';
+import { routeChat, type ChatMessage } from '../engines/aiRouter.js';
 
 const app = new Hono();
+
+// CORS middleware
+app.use('/*', async (c, next) => {
+  await next();
+  c.header('Access-Control-Allow-Origin', '*');
+  c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+});
+
+app.options('/*', (c) => c.text('', 204));
 
 function getLibraryPath(): string {
   return join(process.cwd(), 'brain-data', 'library');
 }
+
+app.get('/health', (c) => {
+  return c.json({ ok: true, version: '2.0.0' });
+});
 
 app.get('/status', (c) => {
   const libraryPath = getLibraryPath();
@@ -33,7 +50,7 @@ app.get('/status', (c) => {
   const runCount = existsSync(runsPath) ? readdirSync(runsPath).filter((f) => f.endsWith('.json')).length : 0;
 
   return c.json({
-    version: '1.0.0',
+    version: '2.0.0',
     status: 'ok',
     books: bookCount,
     runs: runCount,
@@ -172,9 +189,68 @@ app.post('/learn', async (c) => {
   return c.json({ success: true, message: 'Lesson saved to self-learning memory' });
 });
 
-export function startServer(port = 3737): void {
+app.post('/chat', async (c) => {
+  const body = await c.req.json<{ messages: ChatMessage[]; task?: string }>();
+  if (!body?.messages?.length) return c.json({ error: 'Missing messages' }, 400);
+
+  let messages = [...body.messages];
+
+  if (body.task) {
+    const domains = classifyDomains(body.task);
+    const bookStack = selectBookStack(domains);
+    const risk = assessRisk(body.task, domains);
+    const confidence = assessConfidence(body.task, domains, hasPriorLessons());
+    const pack = buildContextPack(body.task, domains, bookStack, risk, confidence, getLibraryPath());
+    const systemPrompt = `You are BuilderBrain, a personal library AI. You have access to the user's knowledge library.
+
+Context Pack for this session:
+- Detected domains: ${domains.join(', ')}
+- Risk: ${risk.level} (${risk.score}/100)
+- Confidence: ${confidence.level} (${confidence.score}/100)
+- Books loaded: ${bookStack.map((b) => b.label).join(', ')}
+
+Answer based on the user's library context. Be concise, practical, and reference specific patterns from their library.`;
+    messages = [{ role: 'system', content: systemPrompt }, ...messages];
+  }
+
+  const response = await routeChat(messages);
+  return c.json(response);
+});
+
+app.get('/config', (c) => {
+  const config = loadConfig();
+  // Mask API keys: show only first 4 chars + ***
+  const masked = {
+    ...config,
+    ai_backends: config.ai_backends.map((b) => ({
+      ...b,
+      apiKey: b.apiKey ? b.apiKey.slice(0, 4) + '***' : undefined,
+    })),
+  };
+  return c.json(masked);
+});
+
+app.post('/config', async (c) => {
+  const body = await c.req.json<Partial<typeof loadConfig extends () => infer R ? R : never>>();
+  if (!body) return c.json({ error: 'Missing config body' }, 400);
+
+  const current = loadConfig();
+  const updated = { ...current, ...body };
+  saveConfig(updated);
+  return c.json({ success: true, message: 'Config saved' });
+});
+
+// Serve dashboard static files if built
+const dashboardPath = join(process.cwd(), 'dist', 'dashboard');
+if (existsSync(dashboardPath)) {
+  app.use('/*', serveStatic({ root: './dist/dashboard' }));
+}
+
+export function startServer(port = 8765): void {
   serve({ fetch: app.fetch, port }, () => {
-    console.log(`BuilderBrain API running at http://localhost:${port}`);
+    console.log(`BuilderBrain running at http://localhost:${port}`);
+    console.log(`Dashboard: http://localhost:${port}`);
+    console.log(`API: http://localhost:${port}/status`);
   });
 }
 

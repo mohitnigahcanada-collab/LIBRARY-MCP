@@ -1,6 +1,6 @@
 {
   "name": "builderbrain",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Local-first AI engineering brain — context, proposals, memory, and verified execution",
   "type": "module",
   "bin": {
@@ -8,18 +8,33 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:dashboard": "vite build",
+    "build:all": "npm run build && npm run build:dashboard",
     "dev": "tsx src/cli/index.ts",
+    "dev:dashboard": "vite",
     "serve": "tsx src/api/index.ts",
+    "start": "tsx src/api/index.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "ai": "^4.0.0",
+    "@ai-sdk/openai": "^1.0.0",
+    "@ai-sdk/anthropic": "^1.0.0",
+    "better-sqlite3": "^9.0.0",
     "commander": "^12.1.0",
     "hono": "^4.4.0",
     "@hono/node-server": "^1.12.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@types/better-sqlite3": "^9.0.0",
     "typescript": "^5.5.0",
     "tsx": "^4.16.0",
     "vitest": "^2.0.0",
