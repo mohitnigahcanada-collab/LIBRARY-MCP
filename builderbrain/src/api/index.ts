@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { join } from 'path';
+import { join, relative, resolve } from 'path';
 import { readdirSync, existsSync, readFileSync, mkdirSync } from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { classifyDomains } from '../engines/classifier.js';
 import { selectBookStack } from '../engines/bookRouter.js';
 import { assessRisk, assessConfidence } from '../engines/riskConfidence.js';
@@ -11,16 +11,21 @@ import { buildContextPack } from '../engines/contextPackBuilder.js';
 import { buildProposal } from '../engines/proposalEngine.js';
 import { saveLesson, hasPriorLessons } from '../memory/selfLearning.js';
 import { saveRunLog, listRunLogs, getRunLog } from '../logger.js';
-import { loadConfig, saveConfig } from '../config/manager.js';
+import { loadConfig, saveConfig, mergeConfigUpdate, type Config } from '../config/manager.js';
 import { routeChat, type ChatMessage } from '../engines/aiRouter.js';
 import { sendAlert } from '../engines/alerts.js';
 
 const app = new Hono();
+const VERSION = '2.0.0';
+const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
 // CORS middleware
 app.use('/*', async (c, next) => {
   await next();
-  c.header('Access-Control-Allow-Origin', '*');
+  const origin = c.req.header('Origin');
+  if (origin && LOCAL_ORIGIN.test(origin)) {
+    c.header('Access-Control-Allow-Origin', origin);
+  }
   c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 });
@@ -31,8 +36,20 @@ function getLibraryPath(): string {
   return join(process.cwd(), 'brain-data', 'library');
 }
 
+function resolveInside(basePath: string, requestedPath: string): string | null {
+  const base = resolve(basePath);
+  const target = resolve(base, requestedPath);
+  const rel = relative(base, target);
+  if (rel.startsWith('..') || rel === '..' || resolve(rel) === rel) return null;
+  return target;
+}
+
+function isValidRunId(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
 app.get('/health', (c) => {
-  return c.json({ ok: true, version: '2.0.0' });
+  return c.json({ ok: true, version: VERSION });
 });
 
 app.get('/status', (c) => {
@@ -52,7 +69,7 @@ app.get('/status', (c) => {
   const runCount = existsSync(runsPath) ? readdirSync(runsPath).filter((f) => f.endsWith('.json')).length : 0;
 
   return c.json({
-    version: '2.0.0',
+    version: VERSION,
     status: 'ok',
     books: bookCount,
     runs: runCount,
@@ -78,7 +95,8 @@ app.get('/book', (c) => {
   const bookPath = c.req.query('path');
   if (!bookPath) return c.json({ error: 'Missing ?path= query param' }, 400);
 
-  const resolved = join(getLibraryPath(), bookPath);
+  const resolved = resolveInside(getLibraryPath(), bookPath);
+  if (!resolved || !bookPath.endsWith('.md')) return c.json({ error: 'Invalid book path' }, 400);
   if (!existsSync(resolved)) return c.json({ error: 'Book not found' }, 404);
 
   const content = readFileSync(resolved, 'utf-8');
@@ -104,12 +122,13 @@ app.get('/library', (c) => {
 });
 
 app.get('/runs', (c) => {
-  const limit = Number(c.req.query('limit') ?? 10);
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 10) || 10, 1), 100);
   return c.json(listRunLogs(limit));
 });
 
 app.get('/runs/:id', (c) => {
   const id = c.req.param('id');
+  if (!isValidRunId(id)) return c.json({ error: 'Invalid run id' }, 400);
   const log = getRunLog(id);
   if (!log) return c.json({ error: 'Run not found' }, 404);
   return c.json(log);
@@ -197,9 +216,38 @@ function getRepoBrainPath(): string {
   return join(process.cwd(), 'brain-data', 'big-bible', 'repos');
 }
 
+function parseGitHubRepoUrl(url: string): { cleanUrl: string; repoName: string } | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    return null;
+  }
+
+  if (!['https:', 'http:'].includes(parsed.protocol)) return null;
+  if (parsed.hostname !== 'github.com' && parsed.hostname !== 'www.github.com') return null;
+  if (parsed.search || parsed.hash) return null;
+
+  const parts = parsed.pathname.replace(/^\/|\/$/g, '').split('/');
+  if (parts.length !== 2) return null;
+
+  const [owner, rawRepo] = parts;
+  const repoName = rawRepo.replace(/\.git$/, '');
+  if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repoName)) return null;
+
+  return {
+    cleanUrl: `https://github.com/${owner}/${repoName}.git`,
+    repoName,
+  };
+}
+
 function cloneRepo(url: string): { success: boolean; repoName: string; path: string; message: string } {
-  const clean = url.replace(/\.git$/, '').trim();
-  const repoName = clean.split('/').pop() ?? 'repo';
+  const parsed = parseGitHubRepoUrl(url);
+  if (!parsed) {
+    return { success: false, repoName: '', path: '', message: 'Only direct GitHub repository URLs are supported' };
+  }
+
+  const { cleanUrl, repoName } = parsed;
   const reposDir = getRepoBrainPath();
   const targetPath = join(reposDir, repoName);
 
@@ -210,7 +258,7 @@ function cloneRepo(url: string): { success: boolean; repoName: string; path: str
   }
 
   try {
-    execSync(`git clone --depth=1 "${clean}" "${targetPath}"`, { timeout: 120_000, stdio: 'pipe' });
+    execFileSync('git', ['clone', '--depth=1', cleanUrl, targetPath], { timeout: 120_000, stdio: 'pipe' });
     return { success: true, repoName, path: targetPath, message: `Cloned ${repoName} → brain-data/big-bible/repos/${repoName}` };
   } catch (err: any) {
     return { success: false, repoName, path: targetPath, message: `Clone failed: ${err.message ?? String(err)}` };
@@ -220,8 +268,7 @@ function cloneRepo(url: string): { success: boolean; repoName: string; path: str
 app.post('/repo/clone', async (c) => {
   const body = await c.req.json<{ url: string }>();
   if (!body?.url) return c.json({ error: 'Missing url' }, 400);
-  const isGithub = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+/.test(body.url);
-  if (!isGithub) return c.json({ error: 'Only GitHub URLs are supported' }, 400);
+  if (!parseGitHubRepoUrl(body.url)) return c.json({ error: 'Only direct GitHub repository URLs are supported' }, 400);
   const result = cloneRepo(body.url);
   if (result.success) {
     sendAlert(`🧠 <b>BuilderBrain</b>\nRepo cloned: <code>${result.repoName}</code>\nSaved to: brain-data/big-bible/repos/${result.repoName}`).catch(() => {});
@@ -326,11 +373,11 @@ app.get('/config', (c) => {
 });
 
 app.post('/config', async (c) => {
-  const body = await c.req.json<Partial<typeof loadConfig extends () => infer R ? R : never>>();
+  const body = await c.req.json<Partial<Config>>();
   if (!body) return c.json({ error: 'Missing config body' }, 400);
 
   const current = loadConfig();
-  const updated = { ...current, ...body };
+  const updated = mergeConfigUpdate(current, body);
   saveConfig(updated);
   return c.json({ success: true, message: 'Config saved' });
 });
@@ -342,7 +389,7 @@ if (existsSync(dashboardPath)) {
 }
 
 export function startServer(port = 8765): void {
-  serve({ fetch: app.fetch, port }, () => {
+  serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
     console.log(`BuilderBrain running at http://localhost:${port}`);
     console.log(`Dashboard: http://localhost:${port}`);
     console.log(`API: http://localhost:${port}/status`);

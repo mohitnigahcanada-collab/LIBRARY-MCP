@@ -12,8 +12,9 @@ import { readdirSync, existsSync, mkdirSync } from 'fs';
 import { createInterface } from 'readline';
 
 const program = new Command();
+const VERSION = '2.0.0';
 
-program.name('brain').description('BuilderBrain — local-first AI engineering brain').version('1.0.0');
+program.name('brain').description('BuilderBrain — local-first AI engineering brain').version(VERSION);
 
 function getLibraryPath(): string {
   return join(process.cwd(), 'brain-data', 'library');
@@ -124,7 +125,7 @@ program
     console.log(`
 BuilderBrain Status
 ═══════════════════
-Version:        1.0.0
+Version:        ${VERSION}
 Library path:   ${libraryPath}
 Books loaded:   ${bookCount} files
 Run logs:       ${runCount}

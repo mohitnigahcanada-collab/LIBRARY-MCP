@@ -12,6 +12,8 @@ function getLibraryPath(): string {
   return join(process.cwd(), 'brain-data', 'library');
 }
 
+const VERSION = '2.0.0';
+
 export interface MCPTool {
   name: string;
   description: string;
@@ -148,7 +150,7 @@ export const mcpTools: MCPTool[] = [
       const runCount = existsSync(runsPath) ? readdirSync(runsPath).filter((f) => f.endsWith('.json')).length : 0;
 
       return {
-        version: '1.0.0',
+        version: VERSION,
         status: 'ok',
         books: bookCount,
         runs: runCount,

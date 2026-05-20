@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync, readFileSync } from 'fs';
+import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -16,6 +16,7 @@ describe('selfLearning', () => {
   const solvedPath = join(tmpBase, 'brain-data', 'library', 'self-learning', 'solved-problems.md');
 
   beforeEach(() => {
+    process.cwd = () => tmpBase;
     if (existsSync(solvedPath)) rmSync(solvedPath);
   });
 

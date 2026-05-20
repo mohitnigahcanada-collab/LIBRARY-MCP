@@ -1,4 +1,5 @@
 import { loadConfig, getEnabledBackends, type AIBackend } from '../config/manager.js'
+import { execFileSync } from 'child_process'
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -12,10 +13,36 @@ export interface ChatResponse {
   tokens?: number
 }
 
+const KEYRING_SERVICE_BY_BACKEND: Record<string, string> = {
+  'groq-llama': 'groq',
+  'gemini-flash': 'gemini-api',
+  'siliconflow-deepseek': 'siliconflow',
+  'nvidia-llama': 'nvidia',
+  'poolside-code': 'poolside',
+}
+
+function readGnomeKeyring(service: string, username = 'default'): string | undefined {
+  try {
+    return execFileSync('secret-tool', ['lookup', 'service', service, 'username', username], {
+      encoding: 'utf-8',
+      timeout: 3000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
+function resolveApiKey(backend: AIBackend): string {
+  const service = backend.apiKeyService ?? KEYRING_SERVICE_BY_BACKEND[backend.name]
+  const keyringKey = service ? readGnomeKeyring(service, backend.apiKeyUsername) : undefined
+  return keyringKey ?? backend.apiKey ?? ''
+}
+
 async function callBackend(backend: AIBackend, messages: ChatMessage[]): Promise<ChatResponse> {
   const endpoint = backend.endpoint ?? 'https://api.openai.com/v1'
   const model = backend.model ?? 'gpt-4-turbo'
-  const apiKey = backend.apiKey ?? ''
+  const apiKey = resolveApiKey(backend)
 
   const response = await fetch(`${endpoint}/chat/completions`, {
     method: 'POST',

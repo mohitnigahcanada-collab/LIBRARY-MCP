@@ -6,6 +6,8 @@ export interface AIBackend {
   type: 'openai' | 'anthropic' | 'openai-compatible' | 'local'
   endpoint?: string
   apiKey?: string
+  apiKeyService?: string
+  apiKeyUsername?: string
   model?: string
   priority: number
   enabled: boolean
@@ -61,6 +63,30 @@ export function saveConfig(config: Config): void {
   const configPath = getConfigPath()
   mkdirSync(join(process.cwd(), 'brain-data'), { recursive: true })
   writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+}
+
+export function mergeConfigUpdate(current: Config, update: Partial<Config>): Config {
+  const merged: Config = { ...current, ...update }
+
+  if (update.alerts) {
+    merged.alerts = { ...current.alerts, ...update.alerts }
+  }
+
+  if (update.daily_trends) {
+    merged.daily_trends = { ...current.daily_trends, ...update.daily_trends }
+  }
+
+  if (update.ai_backends) {
+    merged.ai_backends = update.ai_backends.map((backend) => {
+      const existing = current.ai_backends.find((b) => b.name === backend.name)
+      if (existing?.apiKey && backend.apiKey?.endsWith('***')) {
+        return { ...backend, apiKey: existing.apiKey }
+      }
+      return backend
+    })
+  }
+
+  return merged
 }
 
 export function getEnabledBackends(config: Config): AIBackend[] {
