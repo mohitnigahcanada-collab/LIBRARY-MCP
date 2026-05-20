@@ -238,11 +238,13 @@ export async function scanGitHubTrends(config: TrendConfig): Promise<TrendResult
   dateThreshold.setDate(dateThreshold.getDate() - config.timeWindowDays);
   const dateString = dateThreshold.toISOString().split('T')[0]; // YYYY-MM-DD
   
-  // Build GitHub search query
-  const languageQuery = config.languages.length > 0 
-    ? config.languages.map((lang) => `language:${lang}`).join(' OR ')
+  // Build GitHub search query.
+  // NOTE: GitHub search does NOT allow OR between qualifiers (language:, topic:).
+  // A repo has exactly one primary language, so we filter by the first one only.
+  const languageQuery = config.languages.length > 0
+    ? `language:${config.languages[0]}`
     : '';
-  const topicQuery = config.topics.length > 0 
+  const topicQuery = config.topics.length > 0
     ? config.topics.map((topic) => `topic:${topic}`).join(' ')
     : '';
   

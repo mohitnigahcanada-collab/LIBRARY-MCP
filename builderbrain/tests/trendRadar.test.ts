@@ -188,8 +188,10 @@ describe('TrendRadar Engine', () => {
       const callUrl = mockFetch.mock.calls[0][0];
       // URL is encoded, so check for encoded versions
       expect(callUrl).toContain('stars%3A%3E200'); // encoded "stars:>200"
+      // GitHub search does not allow OR between qualifiers — only the first
+      // language is used (a repo has exactly one primary language).
       expect(callUrl).toContain('TypeScript');
-      expect(callUrl).toContain('JavaScript');
+      expect(callUrl).not.toContain('JavaScript');
       expect(callUrl).toContain('ai');
       expect(callUrl).toContain('mcp');
       expect(callUrl).toContain('per_page=10');

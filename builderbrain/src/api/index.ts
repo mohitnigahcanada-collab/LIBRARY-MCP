@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { join, relative, resolve } from 'path';
-import { readdirSync, existsSync, readFileSync, mkdirSync } from 'fs';
+import { readdirSync, existsSync, readFileSync, mkdirSync, statSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { classifyDomains } from '../engines/classifier.js';
 import { selectBookStack } from '../engines/bookRouter.js';
@@ -412,18 +412,23 @@ app.post('/discover/analyze', async (c) => {
     const { analyzeRepo } = await import('../engines/repoAnalyzer.js');
     const config = loadConfig();
     const aiBackend = config.ai_backends.find(b => b.enabled) ?? config.ai_backends[0];
-    
+
+    if (!aiBackend) {
+      return c.json({ error: 'No AI backend configured. Add one in Settings → AI Backends.' }, 400);
+    }
+
     // Extract repo name from URL
     const repoName = body.url.split('/').pop()?.replace(/\.git$/, '') ?? 'repo';
     const repoPath = join(process.cwd(), 'brain-data', 'big-bible', 'repos', repoName);
-    
+
     if (!existsSync(repoPath)) {
       return c.json({ error: 'Repository not cloned yet. Clone it first.' }, 400);
     }
-    
+
     const result = await analyzeRepo(repoPath, aiBackend);
-    
-    sendAlert(`📊 Repo Analysis Complete\n${result.repoName}\nTech: ${result.techStack.languages.join(', ')}`).catch(() => {});
+
+    const techList = result.techStack?.languages?.join(', ') ?? 'unknown';
+    sendAlert(`📊 Repo Analysis Complete\n${result.repoName}\nTech: ${techList}`).catch(() => {});
     
     return c.json({ success: true, analysis: result.miniBook });
   } catch (error: any) {
@@ -442,7 +447,7 @@ app.get('/discover/books', (c) => {
   const files = readdirSync(discoveredPath).filter(f => f.endsWith('.md'));
   const books = files.map(file => {
     const fullPath = join(discoveredPath, file);
-    const stat = require('fs').statSync(fullPath);
+    const stat = statSync(fullPath);
     return {
       title: file.replace(/\.md$/, '').replace(/-/g, ' '),
       path: `discovered/${file}`,
@@ -567,7 +572,7 @@ if (existsSync(dashboardPath)) {
   app.use('/*', serveStatic({ root: './dist/dashboard' }));
 }
 
-export function startServer(port = 8766): void {
+export function startServer(port = 8765): void {
   serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
     console.log(`BuilderBrain running at http://localhost:${port}`);
     console.log(`Dashboard: http://localhost:${port}`);
