@@ -13,6 +13,7 @@ import { saveLesson, hasPriorLessons } from '../memory/selfLearning.js';
 import { saveRunLog, listRunLogs, getRunLog } from '../logger.js';
 import { loadConfig, saveConfig } from '../config/manager.js';
 import { routeChat, type ChatMessage } from '../engines/aiRouter.js';
+import { sendAlert } from '../engines/alerts.js';
 
 const app = new Hono();
 
@@ -222,7 +223,15 @@ app.post('/repo/clone', async (c) => {
   const isGithub = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+/.test(body.url);
   if (!isGithub) return c.json({ error: 'Only GitHub URLs are supported' }, 400);
   const result = cloneRepo(body.url);
+  if (result.success) {
+    sendAlert(`🧠 <b>BuilderBrain</b>\nRepo cloned: <code>${result.repoName}</code>\nSaved to: brain-data/big-bible/repos/${result.repoName}`).catch(() => {});
+  }
   return c.json(result, result.success ? 200 : 500);
+});
+
+app.post('/alert/test', async (c) => {
+  const result = await sendAlert('🧠 <b>BuilderBrain</b>\nAlert test — connected successfully!');
+  return c.json(result);
 });
 
 app.get('/repos', (c) => {

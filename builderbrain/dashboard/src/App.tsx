@@ -417,6 +417,7 @@ function ResearchMode() {
 
 function LibraryMode() {
   const [books, setBooks] = useState<Record<string, string[]>>({})
+  const [repos, setRepos] = useState<Array<{ name: string; path: string }>>([])
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<string | null>(null)
   const [bookContent, setBookContent] = useState<string | null>(null)
@@ -425,11 +426,12 @@ function LibraryMode() {
   useEffect(() => {
     api.books().then((b) => {
       setBooks(b)
-      // Expand all by default
       const exp: Record<string, boolean> = {}
       Object.keys(b).forEach((k) => { exp[k] = true })
+      exp['big-bible'] = true
       setExpanded(exp)
     }).catch(() => {})
+    api.repos().then(setRepos).catch(() => {})
   }, [])
 
   const openBook = async (cat: string, file: string) => {
@@ -493,9 +495,33 @@ function LibraryMode() {
           ))}
         </div>
       ))}
-      {Object.keys(books).length === 0 && (
-        <div className="empty">Loading library…</div>
-      )}
+
+      {/* Cloned repos section */}
+      <div className="lib-category">
+        <div
+          className="lib-category-header"
+          onClick={() => setExpanded((prev) => ({ ...prev, 'big-bible': !prev['big-bible'] }))}
+        >
+          <span>{expanded['big-bible'] ? '▾' : '▸'}</span>
+          <span>🗄️</span>
+          <span>big-bible / repos</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>{repos.length} repos</span>
+        </div>
+        {expanded['big-bible'] && repos.length === 0 && (
+          <div style={{ padding: '6px 24px', fontSize: 12, color: 'var(--text-muted)' }}>
+            No repos yet. Say "download https://github.com/..." in Chat.
+          </div>
+        )}
+        {expanded['big-bible'] && repos.map((repo) => (
+          <div key={repo.name} className="lib-file">
+            <span>📦</span>
+            {repo.name}
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--green)' }}>cloned</span>
+          </div>
+        ))}
+      </div>
+
+      {Object.keys(books).length === 0 && <div className="empty">Loading library…</div>}
     </div>
   )
 }
@@ -767,6 +793,15 @@ function SettingsMode() {
             onChange={(e) => setConfig({ ...config, alerts: { ...config.alerts, telegram_chat_id: e.target.value } })}
           />
         </div>
+        <button
+          className="btn btn-ghost"
+          onClick={async () => {
+            const r = await fetch('/alert/test', { method: 'POST' }).then(r => r.json()).catch(() => null)
+            alert(r ? `Telegram: ${r.telegram ? '✅' : '❌'}  Slack: ${r.slack ? '✅' : '❌'}` : 'Failed to reach server')
+          }}
+        >
+          Test Alerts
+        </button>
       </section>
 
       <button className="btn btn-primary" onClick={save} disabled={saving}>
