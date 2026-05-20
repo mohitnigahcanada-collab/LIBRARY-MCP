@@ -198,7 +198,7 @@ program
 program
   .command('serve')
   .description('Start the BuilderBrain local API server')
-  .option('-p, --port <number>', 'Port to listen on', '3737')
+  .option('-p, --port <number>', 'Port to listen on', '8765')
   .action(async (opts) => {
     const port = Number(opts.port);
     console.log(`Starting BuilderBrain API on port ${port}...`);

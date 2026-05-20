@@ -255,3 +255,11 @@ export function startServer(port = 8765): void {
 }
 
 export default app;
+
+// Run when executed directly via `npm start` or `tsx src/api/index.ts`
+import { fileURLToPath } from 'url';
+const isMain = process.argv[1] &&
+  (process.argv[1] === fileURLToPath(import.meta.url) ||
+   process.argv[1].endsWith('src/api/index.ts') ||
+   process.argv[1].endsWith('src/api/index.js'));
+if (isMain) startServer();
