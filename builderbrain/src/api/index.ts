@@ -193,26 +193,52 @@ app.post('/chat', async (c) => {
   const body = await c.req.json<{ messages: ChatMessage[]; task?: string }>();
   if (!body?.messages?.length) return c.json({ error: 'Missing messages' }, 400);
 
-  let messages = [...body.messages];
+  const libraryPath = getLibraryPath();
+  const categories = ['pocket-rules', 'mini-book', 'self-learning', 'user-style'];
+  const bookList: string[] = [];
+  for (const cat of categories) {
+    const catPath = join(libraryPath, cat);
+    if (existsSync(catPath)) {
+      readdirSync(catPath).filter((f) => f.endsWith('.md')).forEach((f) => bookList.push(`${cat}/${f}`));
+    }
+  }
 
+  let taskSection = '';
   if (body.task) {
     const domains = classifyDomains(body.task);
     const bookStack = selectBookStack(domains);
     const risk = assessRisk(body.task, domains);
     const confidence = assessConfidence(body.task, domains, hasPriorLessons());
-    const pack = buildContextPack(body.task, domains, bookStack, risk, confidence, getLibraryPath());
-    const systemPrompt = `You are BuilderBrain, a personal library AI. You have access to the user's knowledge library.
-
-Context Pack for this session:
-- Detected domains: ${domains.join(', ')}
-- Risk: ${risk.level} (${risk.score}/100)
-- Confidence: ${confidence.level} (${confidence.score}/100)
-- Books loaded: ${bookStack.map((b) => b.label).join(', ')}
-
-Answer based on the user's library context. Be concise, practical, and reference specific patterns from their library.`;
-    messages = [{ role: 'system', content: systemPrompt }, ...messages];
+    buildContextPack(body.task, domains, bookStack, risk, confidence, libraryPath);
+    taskSection = `\nACTIVE TASK: "${body.task}"\nDomains: ${domains.join(', ')} | Risk: ${risk.level} (${risk.score}/100) | Confidence: ${confidence.level}\nBooks loaded: ${bookStack.map((b) => b.label).join(', ')}`;
   }
 
+  const systemPrompt = `You are BuilderBrain — a personal AI librarian and engineering brain running locally at http://localhost:8765.
+
+WHO YOU ARE:
+You are NOT a generic AI. You are the user's personal library AI with ${bookList.length} curated knowledge books.
+You give direct, practical answers. No "I'm just an AI" disclaimers. No generic advice.
+You are opinionated, efficient, and always reference the library first.
+
+YOUR LIBRARY (${bookList.length} books):
+${bookList.map((b) => `  • ${b}`).join('\n')}
+
+WHAT YOU CAN DO:
+- Answer coding questions using library patterns
+- Analyze tasks for risk, domains, and required books
+- Give exact terminal commands (git clone, npm install, etc.)
+- Help plan projects using the user's proven patterns
+- Tell the user exactly which repos to clone and why
+
+WHEN ASKED TO "DOWNLOAD A REPO":
+Give the exact command: git clone <url>
+Do NOT say you cannot download — give the command and tell them to run it.
+
+WHEN ASKED ABOUT YOUR CAPABILITIES:
+Explain what you ARE (a local library AI with their knowledge) not what you aren't.
+${taskSection}`;
+
+  const messages = [{ role: 'system' as const, content: systemPrompt }, ...body.messages];
   const response = await routeChat(messages);
   return c.json(response);
 });

@@ -111,12 +111,29 @@ interface ContextMeta {
   tokens?: number
 }
 
+interface Conversation {
+  id: string
+  title: string
+  messages: ChatMessage[]
+  timestamp: number
+}
+
 function riskColor(level: string) {
   const map: Record<string, string> = { Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high', Critical: 'badge-critical' }
   return map[level] ?? 'badge-blue'
 }
 
+function loadConversations(): Conversation[] {
+  try { return JSON.parse(localStorage.getItem('bb_conversations') ?? '[]') } catch { return [] }
+}
+
+function saveConversations(convs: Conversation[]) {
+  localStorage.setItem('bb_conversations', JSON.stringify(convs.slice(0, 50)))
+}
+
 function ChatMode() {
+  const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations())
+  const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -124,11 +141,32 @@ function ChatMode() {
   const [activeTask, setActiveTask] = useState<string | undefined>(undefined)
   const [meta, setMeta] = useState<ContextMeta | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  const newChat = () => {
+    setActiveId(null)
+    setMessages([])
+    setMeta(null)
+    setTaskInput('')
+    setActiveTask(undefined)
+  }
+
+  const loadConversation = (conv: Conversation) => {
+    setActiveId(conv.id)
+    setMessages(conv.messages)
+    setMeta(null)
+  }
+
+  const deleteConversation = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const updated = conversations.filter((c) => c.id !== id)
+    setConversations(updated)
+    saveConversations(updated)
+    if (activeId === id) newChat()
+  }
 
   const send = useCallback(async () => {
     if (!input.trim() || loading) return
@@ -139,7 +177,6 @@ function ChatMode() {
     setLoading(true)
 
     try {
-      // Fetch context if task is active
       let domains: string[] = []
       let risk = { level: 'Low', score: 0 }
       let confidence = { level: 'High', score: 100 }
@@ -152,73 +189,104 @@ function ChatMode() {
           risk = ctx.risk ?? risk
           confidence = ctx.confidence ?? confidence
           books = (ctx.bookStack ?? []).map((b: any) => b.label)
-        } catch { /* ignore context errors */ }
+        } catch { /* ignore */ }
       }
 
       const response = await api.chat(newMessages, activeTask)
-      setMessages([...newMessages, { role: 'assistant', content: response.text }])
+      const finalMessages = [...newMessages, { role: 'assistant' as const, content: response.text }]
+      setMessages(finalMessages)
       setMeta({ domains, risk, confidence, books, backend: response.backend, model: response.model, tokens: response.tokens })
+
+      // Persist to conversation history
+      const title = userMsg.content.slice(0, 60)
+      const id = activeId ?? `conv_${Date.now()}`
+      const conv: Conversation = { id, title, messages: finalMessages, timestamp: Date.now() }
+      const updated = [conv, ...conversations.filter((c) => c.id !== id)]
+      setConversations(updated)
+      saveConversations(updated)
+      setActiveId(id)
     } catch (err) {
       setMessages([...newMessages, { role: 'assistant', content: `Error: ${err instanceof Error ? err.message : String(err)}` }])
     } finally {
       setLoading(false)
     }
-  }, [input, loading, messages, activeTask])
+  }, [input, loading, messages, activeTask, activeId, conversations])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send()
-    }
-  }
-
-  const setTask = () => {
-    setActiveTask(taskInput.trim() || undefined)
-    setMeta(null)
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
   return (
     <>
+      {/* History sidebar */}
+      <div style={{ width: 200, minWidth: 200, background: 'var(--sidebar)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 10px', borderBottom: '1px solid var(--border)' }}>
+          <button className="btn btn-primary" style={{ width: '100%', fontSize: 12 }} onClick={newChat}>+ New Chat</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+          {conversations.length === 0 && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 4px', textAlign: 'center' }}>No history yet</div>
+          )}
+          {conversations.map((conv) => (
+            <div
+              key={conv.id}
+              onClick={() => loadConversation(conv)}
+              style={{
+                padding: '7px 8px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
+                background: activeId === conv.id ? 'rgba(124,58,237,0.15)' : 'transparent',
+                border: activeId === conv.id ? '1px solid rgba(124,58,237,0.3)' : '1px solid transparent',
+                display: 'flex', alignItems: 'center', gap: 4
+              }}
+            >
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                💬 {conv.title}
+              </span>
+              <button
+                onClick={(e) => deleteConversation(conv.id, e)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: '0 2px', flexShrink: 0 }}
+                title="Delete"
+              >×</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main chat */}
       <div className="content chat-container">
         <div className="chat-header">
           <span style={{ fontSize: 20 }}>💬</span>
           <h2>Chat with BuilderBrain</h2>
-          {activeTask && (
-            <span className="badge badge-blue" style={{ marginLeft: 'auto' }}>
-              📌 {activeTask.slice(0, 40)}{activeTask.length > 40 ? '…' : ''}
-            </span>
-          )}
-        </div>
-
-        <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-          <input
-            className="form-input"
-            style={{ flex: 1 }}
-            placeholder="Set task context (optional) — e.g. 'build auth system'"
-            value={taskInput}
-            onChange={(e) => setTaskInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && setTask()}
-          />
-          <button className="btn btn-ghost" onClick={setTask}>Set</button>
-          {activeTask && (
-            <button className="btn btn-ghost" onClick={() => { setActiveTask(undefined); setTaskInput(''); setMeta(null) }}>Clear</button>
-          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              className="form-input"
+              style={{ width: 240, fontSize: 12 }}
+              placeholder="Task context (optional)"
+              value={taskInput}
+              onChange={(e) => setTaskInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (setActiveTask(taskInput.trim() || undefined), setMeta(null))}
+            />
+            <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }}
+              onClick={() => { setActiveTask(taskInput.trim() || undefined); setMeta(null) }}>Set</button>
+          </div>
         </div>
 
         <div className="chat-messages">
           {messages.length === 0 && (
             <div className="chat-welcome">
               <div style={{ fontSize: 48 }}>🧠</div>
-              <h2>Ask your library anything</h2>
-              <p>Set a task context above to get domain-aware responses from your knowledge library.</p>
+              <h2>Your personal library AI</h2>
+              <p style={{ maxWidth: 400 }}>Ask anything — coding patterns, repo recommendations, project planning. BuilderBrain answers from your library first.</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 500, marginTop: 8 }}>
+                {['How do I structure a SaaS backend?', 'What JWT patterns do you know?', 'Suggest a video generation stack', 'Clone a trending repo for me'].map((s) => (
+                  <button key={s} className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setInput(s)}>{s}</button>
+                ))}
+              </div>
             </div>
           )}
 
           {messages.filter((m) => m.role !== 'system').map((msg, i) => (
             <div key={i} className={`msg ${msg.role}`}>
-              <div className="msg-avatar">
-                {msg.role === 'user' ? '👤' : '🧠'}
-              </div>
+              <div className="msg-avatar">{msg.role === 'user' ? '👤' : '🧠'}</div>
               <div>
                 <div className="msg-bubble" style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
               </div>
@@ -228,19 +296,15 @@ function ChatMode() {
           {loading && (
             <div className="msg assistant">
               <div className="msg-avatar">🧠</div>
-              <div className="msg-bubble typing">
-                <span /><span /><span />
-              </div>
+              <div className="msg-bubble typing"><span /><span /><span /></div>
             </div>
           )}
-
           <div ref={bottomRef} />
         </div>
 
         <div className="chat-input-area">
           <div className="chat-input-row">
             <textarea
-              ref={textareaRef}
               className="chat-input"
               placeholder="Ask anything… (Enter to send, Shift+Enter for newline)"
               value={input}
@@ -248,31 +312,22 @@ function ChatMode() {
               onKeyDown={handleKeyDown}
               rows={1}
             />
-            <button
-              className="btn btn-primary btn-icon"
-              onClick={send}
-              disabled={loading || !input.trim()}
-              title="Send"
-            >
-              ↑
-            </button>
+            <button className="btn btn-primary btn-icon" onClick={send} disabled={loading || !input.trim()} title="Send">↑</button>
           </div>
         </div>
       </div>
 
+      {/* Right panel */}
       <div className="right-panel">
         <h3>Context</h3>
-        {!meta && (
-          <div className="empty" style={{ padding: 16 }}>Send a message to see context metadata</div>
-        )}
-        {meta && (
+        {!meta ? (
+          <div className="empty" style={{ padding: 16 }}>Send a message to see context</div>
+        ) : (
           <>
             {meta.domains.length > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>DOMAINS</div>
-                <div className="tags">
-                  {meta.domains.map((d) => <span key={d} className="tag">{d}</span>)}
-                </div>
+                <div className="tags">{meta.domains.map((d) => <span key={d} className="tag">{d}</span>)}</div>
               </div>
             )}
             <div style={{ marginBottom: 12 }}>
@@ -281,14 +336,12 @@ function ChatMode() {
             </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>CONFIDENCE</div>
-              <span className={`badge badge-blue`}>{meta.confidence.level} ({meta.confidence.score}/100)</span>
+              <span className="badge badge-blue">{meta.confidence.level} ({meta.confidence.score}/100)</span>
             </div>
             {meta.books.length > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>BOOKS LOADED</div>
-                {meta.books.map((b) => (
-                  <div key={b} style={{ fontSize: 12, color: 'var(--text-muted)', padding: '2px 0' }}>📖 {b}</div>
-                ))}
+                {meta.books.map((b) => <div key={b} style={{ fontSize: 12, color: 'var(--text-muted)', padding: '2px 0' }}>📖 {b}</div>)}
               </div>
             )}
             {meta.backend && meta.backend !== 'none' && (
@@ -299,15 +352,6 @@ function ChatMode() {
               </div>
             )}
           </>
-        )}
-        {messages.length > 0 && (
-          <button
-            className="btn btn-ghost"
-            style={{ width: '100%', marginTop: 12 }}
-            onClick={() => { setMessages([]); setMeta(null) }}
-          >
-            Clear Chat
-          </button>
         )}
       </div>
     </>
