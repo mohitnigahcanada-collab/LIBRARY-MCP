@@ -23,7 +23,7 @@ app.use('/*', async (c, next) => {
   c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 });
 
-app.options('/*', (c) => c.text('', 204));
+app.options('/*', (c) => new Response('', { status: 204 }));
 
 function getLibraryPath(): string {
   return join(process.cwd(), 'brain-data', 'library');

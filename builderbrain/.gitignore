@@ -1,2 +1,5 @@
+brain-data/config.json
+brain-data/runs/
 dist/
 node_modules/
+*.local
