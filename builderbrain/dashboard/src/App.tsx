@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { api, type ChatMessage, type StatusResponse, type RunLog, type Config, type AIBackend } from './api'
+import { api, type ChatMessage, type StatusResponse, type RunLog, type Config, type AIBackend, type TrendingRepo, type DiscoveredBook, type EvolutionInsights, type RadarSchedule } from './api'
 
-type Mode = 'agent' | 'chat' | 'research' | 'library' | 'ops' | 'settings'
+type Mode = 'agent' | 'chat' | 'research' | 'library' | 'ops' | 'discover' | 'settings'
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
@@ -11,6 +11,7 @@ function Sidebar({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) 
     { id: 'chat', icon: '💬', label: 'Chat' },
     { id: 'research', icon: '🔍', label: 'Research' },
     { id: 'library', icon: '📚', label: 'Library' },
+    { id: 'discover', icon: '🌟', label: 'Discover' },
     { id: 'ops', icon: '📊', label: 'Ops' },
   ]
   return (
@@ -582,6 +583,296 @@ function OpsMode({ status }: { status: StatusResponse | null }) {
   )
 }
 
+// ── Discover Mode ─────────────────────────────────────────────────────────────
+
+function DiscoverMode() {
+  const [trendingRepos, setTrendingRepos] = useState<TrendingRepo[]>([])
+  const [discoveredBooks, setDiscoveredBooks] = useState<DiscoveredBook[]>([])
+  const [evolution, setEvolution] = useState<EvolutionInsights | null>(null)
+  const [radar, setRadar] = useState<RadarSchedule | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [scanLoading, setScanLoading] = useState(false)
+  const [selectedBook, setSelectedBook] = useState<string | null>(null)
+  const [bookContent, setBookContent] = useState<string | null>(null)
+  const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  useEffect(() => {
+    loadDiscoverData()
+  }, [])
+
+  const loadDiscoverData = async () => {
+    setLoading(true)
+    try {
+      const [repos, books, evo, radarData] = await Promise.all([
+        api.getTrendingRepos().catch(() => []),
+        api.getDiscoveredBooks().catch(() => []),
+        api.getEvolutionInsights().catch(() => null),
+        api.getRadarSchedule().catch(() => null),
+      ])
+      setTrendingRepos(repos)
+      setDiscoveredBooks(books)
+      setEvolution(evo)
+      setRadar(radarData)
+    } catch (err) {
+      showAlert('error', 'Failed to load discover data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const showAlert = (type: 'success' | 'error', message: string) => {
+    setAlert({ type, message })
+    setTimeout(() => setAlert(null), 3000)
+  }
+
+  const scanNow = async () => {
+    setScanLoading(true)
+    try {
+      const result = await api.scanTrends()
+      showAlert('success', `Scan complete! Found ${result.reposFound} repos`)
+      loadDiscoverData()
+    } catch (err) {
+      showAlert('error', 'Scan failed')
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
+  const cloneRepo = async (url: string, name: string) => {
+    try {
+      await api.cloneRepo(url)
+      showAlert('success', `Cloned ${name} successfully!`)
+    } catch (err) {
+      showAlert('error', `Failed to clone ${name}`)
+    }
+  }
+
+  const analyzeRepo = async (url: string, name: string) => {
+    try {
+      const result = await api.analyzeRepo(url)
+      showAlert('success', `Analysis started for ${name}`)
+    } catch (err) {
+      showAlert('error', `Failed to analyze ${name}`)
+    }
+  }
+
+  const toggleRadar = async () => {
+    if (!radar) return
+    try {
+      await api.toggleRadar(!radar.enabled)
+      setRadar({ ...radar, enabled: !radar.enabled })
+      showAlert('success', `Radar ${!radar.enabled ? 'enabled' : 'disabled'}`)
+    } catch (err) {
+      showAlert('error', 'Failed to toggle radar')
+    }
+  }
+
+  const applyEvolution = async () => {
+    try {
+      const result = await api.applyEvolution()
+      showAlert('success', 'Evolution applied!')
+      loadDiscoverData()
+    } catch (err) {
+      showAlert('error', 'Failed to apply evolution')
+    }
+  }
+
+  const openBook = async (book: DiscoveredBook) => {
+    setSelectedBook(book.path)
+    setLoading(true)
+    try {
+      const r = await api.book(book.path)
+      setBookContent(r.content)
+    } catch {
+      setBookContent('Failed to load book.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (selectedBook && bookContent !== null) {
+    return (
+      <div className="content book-viewer">
+        <button className="back-btn" onClick={() => { setSelectedBook(null); setBookContent(null) }}>
+          ← Back to Discover
+        </button>
+        <h1>{selectedBook.split('/').pop()?.replace('.md', '')}</h1>
+        {loading ? <div className="spinner" /> : (
+          <div className="book-content">{bookContent}</div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="content discover-container">
+      {/* Alert banner */}
+      {alert && (
+        <div className={`alert-banner ${alert.type === 'success' ? 'alert-success' : 'alert-error'}`}>
+          {alert.type === 'success' ? '✓' : '✗'} {alert.message}
+        </div>
+      )}
+
+      <h2 style={{ fontSize: 18, marginBottom: 20 }}>🌟 Discover</h2>
+
+      {/* Radar Schedule Section */}
+      <section className="discover-section">
+        <div className="discover-section-header">
+          <h3>🎯 Radar Schedule</h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn-primary" onClick={scanNow} disabled={scanLoading} style={{ fontSize: 12 }}>
+              {scanLoading ? <span className="spinner" /> : '🔄 Scan Now'}
+            </button>
+            <label className="toggle">
+              <input type="checkbox" checked={radar?.enabled ?? false} onChange={toggleRadar} />
+              <span className="slider" />
+            </label>
+          </div>
+        </div>
+        {radar && (
+          <div className="stats-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', marginTop: 12 }}>
+            <div className="stat-card">
+              <div className="stat-label">Status</div>
+              <div className="stat-value" style={{ fontSize: 14, color: radar.enabled ? 'var(--green)' : 'var(--text-muted)' }}>
+                {radar.enabled ? '● Active' : '○ Paused'}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Next Scan</div>
+              <div className="stat-value" style={{ fontSize: 12 }}>{radar.nextScan || 'N/A'}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Last Scan</div>
+              <div className="stat-value" style={{ fontSize: 12 }}>{radar.lastScan || 'Never'}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Scans Today</div>
+              <div className="stat-value">{radar.scansToday}</div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Trending Repos Section */}
+      <section className="discover-section">
+        <div className="discover-section-header">
+          <h3>🔥 Trending Repos</h3>
+          <span className="badge badge-blue">{trendingRepos.length} repos</span>
+        </div>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 20 }}><span className="spinner" /></div>
+        ) : trendingRepos.length === 0 ? (
+          <div className="empty" style={{ padding: 20 }}>No trending repos yet. Click "Scan Now" to discover.</div>
+        ) : (
+          <div className="repo-grid">
+            {trendingRepos.slice(0, 6).map((repo) => (
+              <div key={repo.url} className="repo-card">
+                <div className="repo-card-header">
+                  <div style={{ flex: 1 }}>
+                    <div className="repo-name">{repo.name}</div>
+                    <div className="repo-meta">
+                      <span>⭐ {repo.stars.toLocaleString()}</span>
+                      {repo.language && <span className="tag">{repo.language}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="repo-description">{repo.description || 'No description'}</div>
+                {repo.topics.length > 0 && (
+                  <div className="tags" style={{ marginTop: 8 }}>
+                    {repo.topics.slice(0, 3).map((t) => <span key={t} className="tag">{t}</span>)}
+                  </div>
+                )}
+                <div className="repo-actions">
+                  <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => cloneRepo(repo.url, repo.name)}>
+                    📥 Clone
+                  </button>
+                  <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => analyzeRepo(repo.url, repo.name)}>
+                    🔍 Analyze
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Discovered Knowledge Section */}
+      <section className="discover-section">
+        <div className="discover-section-header">
+          <h3>📖 Discovered Knowledge</h3>
+          <span className="badge badge-blue">{discoveredBooks.length} books</span>
+        </div>
+        {discoveredBooks.length === 0 ? (
+          <div className="empty" style={{ padding: 20 }}>No discovered books yet. Knowledge will appear here as radar scans.</div>
+        ) : (
+          <div className="book-list">
+            {discoveredBooks.map((book) => (
+              <div key={book.path} className="book-item" onClick={() => openBook(book)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <span style={{ fontSize: 18 }}>📄</span>
+                  <div>
+                    <div className="book-title">{book.title}</div>
+                    <div className="book-meta">
+                      <span className="tag">{book.category}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {new Date(book.createdAt).toLocaleDateString()} · {Math.round(book.size / 1024)}KB
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <span style={{ fontSize: 18, color: 'var(--text-muted)' }}>→</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Evolution Insights Section */}
+      <section className="discover-section">
+        <div className="discover-section-header">
+          <h3>🧬 Evolution Insights</h3>
+          <button className="btn btn-ghost" onClick={applyEvolution} style={{ fontSize: 12 }}>
+            Apply Evolution
+          </button>
+        </div>
+        {!evolution ? (
+          <div className="empty" style={{ padding: 20 }}>Loading evolution data...</div>
+        ) : (
+          <>
+            <div className="stats-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', marginBottom: 16 }}>
+              <div className="stat-card">
+                <div className="stat-label">New Keywords</div>
+                <div className="stat-value">{evolution.newKeywords}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Lessons Compressed</div>
+                <div className="stat-value">{evolution.lessonsCompressed}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Last Evolution</div>
+                <div className="stat-value" style={{ fontSize: 12 }}>{evolution.lastEvolution || 'Never'}</div>
+              </div>
+            </div>
+            {evolution.topPatterns.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>TOP PATTERNS</div>
+                <div className="pattern-list">
+                  {evolution.topPatterns.map((p) => (
+                    <div key={p.pattern} className="pattern-item">
+                      <span className="pattern-name">{p.pattern}</span>
+                      <span className="badge badge-blue">{p.count}x</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    </div>
+  )
+}
+
 // ── Settings Mode ─────────────────────────────────────────────────────────────
 
 function SettingsMode() {
@@ -833,6 +1124,7 @@ export default function App() {
         {mode === 'chat' && <ChatMode />}
         {mode === 'research' && <ResearchMode />}
         {mode === 'library' && <LibraryMode />}
+        {mode === 'discover' && <DiscoverMode />}
         {mode === 'ops' && <OpsMode status={status} />}
         {mode === 'settings' && <SettingsMode />}
       </div>

@@ -359,6 +359,185 @@ ${taskSection}${cloneNote}`;
   return c.json(response);
 });
 
+// ── Discover Mode (v3 AI Layer) ──────────────────────────────────────────────
+
+// Trend scanning cache
+let trendScanCache: any[] = [];
+let lastTrendScan: string | null = null;
+
+app.post('/discover/scan', async (c) => {
+  try {
+    const { scanTrends } = await import('../engines/trendRadar.js');
+    const config = loadConfig();
+    
+    const trendConfig = {
+      githubToken: config.trend_radar?.github_token,
+      braveApiKey: config.trend_radar?.brave_api_key,
+      minStars: config.trend_radar?.min_stars ?? 100,
+      languages: config.trend_radar?.languages ?? ['TypeScript', 'JavaScript'],
+      topics: config.trend_radar?.topics ?? ['ai', 'mcp'],
+      timeWindowDays: 7,
+      maxResults: 20,
+      enableBraveSearch: !!config.trend_radar?.brave_api_key,
+    };
+    
+    const results = await scanTrends(trendConfig);
+    trendScanCache = results;
+    lastTrendScan = new Date().toISOString();
+    
+    sendAlert(`🔍 TrendRadar Scan Complete\nFound ${results.length} trending repos`).catch(() => {});
+    
+    return c.json({ success: true, reposFound: results.length });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.get('/discover/trending', (c) => {
+  return c.json(trendScanCache.map(r => ({
+    name: r.fullName,
+    url: r.url,
+    stars: r.stars,
+    language: r.language ?? 'Unknown',
+    description: r.description ?? '',
+    topics: r.topics ?? [],
+  })));
+});
+
+app.post('/discover/analyze', async (c) => {
+  try {
+    const body = await c.req.json<{ url: string }>();
+    if (!body?.url) return c.json({ error: 'Missing url' }, 400);
+    
+    const { analyzeRepo } = await import('../engines/repoAnalyzer.js');
+    const config = loadConfig();
+    const aiBackend = config.ai_backends.find(b => b.enabled) ?? config.ai_backends[0];
+    
+    // Extract repo name from URL
+    const repoName = body.url.split('/').pop()?.replace(/\.git$/, '') ?? 'repo';
+    const repoPath = join(process.cwd(), 'brain-data', 'big-bible', 'repos', repoName);
+    
+    if (!existsSync(repoPath)) {
+      return c.json({ error: 'Repository not cloned yet. Clone it first.' }, 400);
+    }
+    
+    const result = await analyzeRepo(repoPath, aiBackend);
+    
+    sendAlert(`📊 Repo Analysis Complete\n${result.repoName}\nTech: ${result.techStack.languages.join(', ')}`).catch(() => {});
+    
+    return c.json({ success: true, analysis: result.miniBook });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.get('/discover/books', (c) => {
+  const discoveredPath = join(process.cwd(), 'brain-data', 'library', 'discovered');
+  
+  if (!existsSync(discoveredPath)) {
+    mkdirSync(discoveredPath, { recursive: true });
+    return c.json([]);
+  }
+  
+  const files = readdirSync(discoveredPath).filter(f => f.endsWith('.md'));
+  const books = files.map(file => {
+    const fullPath = join(discoveredPath, file);
+    const stat = require('fs').statSync(fullPath);
+    return {
+      title: file.replace(/\.md$/, '').replace(/-/g, ' '),
+      path: `discovered/${file}`,
+      category: 'auto-discovered',
+      createdAt: stat.birthtime.toISOString(),
+      size: Math.round(stat.size / 1024), // KB
+    };
+  });
+  
+  return c.json(books);
+});
+
+app.get('/discover/evolution', async (c) => {
+  try {
+    const { analyzeRunHistory } = await import('../engines/knowledgeEvolver.js');
+    const config = loadConfig();
+    
+    const insight = await analyzeRunHistory(100, {
+      minFrequency: config.knowledge_evolution?.min_pattern_count ?? 10,
+    });
+    
+    const topPatterns = Array.from(insight.patternFrequency.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([pattern, count]) => ({ pattern, count }));
+    
+    return c.json({
+      newKeywords: insight.newKeywords.size,
+      patternFrequency: Object.fromEntries(insight.patternFrequency),
+      lessonsCompressed: 0, // TODO: implement compression tracking
+      lastEvolution: new Date().toISOString(),
+      topPatterns,
+    });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+app.post('/discover/evolution/apply', async (c) => {
+  try {
+    const { analyzeRunHistory, evolveLibrary } = await import('../engines/knowledgeEvolver.js');
+    const config = loadConfig();
+    
+    const insight = await analyzeRunHistory(100, {
+      minFrequency: config.knowledge_evolution?.min_pattern_count ?? 10,
+    });
+    
+    await evolveLibrary(insight);
+    
+    const changes = `Updated ${insight.newKeywords.size} keywords, ` +
+                    `${insight.suggestedBookUpdates.length} book suggestions`;
+    
+    sendAlert(`🧠 Knowledge Evolution Applied\n${changes}`).catch(() => {});
+    
+    return c.json({ success: true, changes });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.get('/discover/radar', (c) => {
+  const config = loadConfig();
+  
+  return c.json({
+    enabled: config.trend_radar?.enabled ?? false,
+    nextScan: 'Not scheduled', // TODO: implement cron schedule reading
+    lastScan: lastTrendScan ?? 'Never',
+    scansToday: trendScanCache.length > 0 ? 1 : 0,
+  });
+});
+
+app.post('/discover/radar/toggle', async (c) => {
+  try {
+    const body = await c.req.json<{ enabled: boolean }>();
+    const config = loadConfig();
+    
+    config.trend_radar = config.trend_radar ?? {
+      enabled: false,
+      schedule_cron: '0 9 * * *',
+      min_stars: 100,
+      languages: ['TypeScript'],
+      topics: ['ai'],
+    };
+    
+    config.trend_radar.enabled = body.enabled;
+    saveConfig(config);
+    
+    return c.json({ success: true });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ── Config ────────────────────────────────────────────────────────────────────
+
 app.get('/config', (c) => {
   const config = loadConfig();
   // Mask API keys: show only first 4 chars + ***
@@ -388,7 +567,7 @@ if (existsSync(dashboardPath)) {
   app.use('/*', serveStatic({ root: './dist/dashboard' }));
 }
 
-export function startServer(port = 8765): void {
+export function startServer(port = 8766): void {
   serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
     console.log(`BuilderBrain running at http://localhost:${port}`);
     console.log(`Dashboard: http://localhost:${port}`);

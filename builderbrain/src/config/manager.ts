@@ -29,6 +29,25 @@ export interface Config {
     filter_min_stars: number
     max_repos_per_day: number
   }
+  trend_radar?: {
+    enabled: boolean
+    schedule_cron: string
+    github_token?: string
+    brave_api_key?: string
+    min_stars: number
+    languages: string[]
+    topics: string[]
+  }
+  repo_analysis?: {
+    enabled: boolean
+    auto_analyze_on_clone: boolean
+    timeout_seconds: number
+  }
+  knowledge_evolution?: {
+    enabled: boolean
+    run_frequency_hours: number
+    min_pattern_count: number
+  }
 }
 
 const DEFAULT_CONFIG: Config = {

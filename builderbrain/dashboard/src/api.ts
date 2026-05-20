@@ -73,6 +73,38 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return r.json()
 }
 
+export interface TrendingRepo {
+  name: string
+  url: string
+  stars: number
+  language: string
+  description: string
+  topics: string[]
+}
+
+export interface DiscoveredBook {
+  title: string
+  path: string
+  category: string
+  createdAt: string
+  size: number
+}
+
+export interface EvolutionInsights {
+  newKeywords: number
+  patternFrequency: Record<string, number>
+  lessonsCompressed: number
+  lastEvolution: string
+  topPatterns: Array<{ pattern: string; count: number }>
+}
+
+export interface RadarSchedule {
+  enabled: boolean
+  nextScan: string
+  lastScan: string
+  scansToday: number
+}
+
 export const api = {
   status: () => get<StatusResponse>('/status'),
   books: () => get<Record<string, string[]>>('/books'),
@@ -87,4 +119,14 @@ export const api = {
     post<{ success: boolean }>('/learn', lesson),
   cloneRepo: (url: string) => post<{ success: boolean; repoName: string; path: string; message: string }>('/repo/clone', { url }),
   repos: () => get<Array<{ name: string; path: string }>>('/repos'),
+  
+  // Discover mode APIs
+  scanTrends: () => post<{ success: boolean; reposFound: number }>('/discover/scan', {}),
+  getTrendingRepos: () => get<TrendingRepo[]>('/discover/trending'),
+  analyzeRepo: (url: string) => post<{ success: boolean; analysis: string }>('/discover/analyze', { url }),
+  getDiscoveredBooks: () => get<DiscoveredBook[]>('/discover/books'),
+  getEvolutionInsights: () => get<EvolutionInsights>('/discover/evolution'),
+  applyEvolution: () => post<{ success: boolean; changes: string }>('/discover/evolution/apply', {}),
+  getRadarSchedule: () => get<RadarSchedule>('/discover/radar'),
+  toggleRadar: (enabled: boolean) => post<{ success: boolean }>('/discover/radar/toggle', { enabled }),
 }
