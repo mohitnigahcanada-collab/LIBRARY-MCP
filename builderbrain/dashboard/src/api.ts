@@ -85,4 +85,6 @@ export const api = {
   saveConfig: (config: Partial<Config>) => post<{ success: boolean }>('/config', config),
   learn: (lesson: { task: string; problem: string; rootCause: string; solution: string; evidence: string }) =>
     post<{ success: boolean }>('/learn', lesson),
+  cloneRepo: (url: string) => post<{ success: boolean; repoName: string; path: string; message: string }>('/repo/clone', { url }),
+  repos: () => get<Array<{ name: string; path: string }>>('/repos'),
 }

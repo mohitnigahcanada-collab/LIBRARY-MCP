@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { join } from 'path';
-import { readdirSync, existsSync, readFileSync } from 'fs';
+import { readdirSync, existsSync, readFileSync, mkdirSync } from 'fs';
+import { execSync } from 'child_process';
 import { classifyDomains } from '../engines/classifier.js';
 import { selectBookStack } from '../engines/bookRouter.js';
 import { assessRisk, assessConfidence } from '../engines/riskConfidence.js';
@@ -189,6 +190,52 @@ app.post('/learn', async (c) => {
   return c.json({ success: true, message: 'Lesson saved to self-learning memory' });
 });
 
+// ── Repo clone ────────────────────────────────────────────────────────────────
+
+function getRepoBrainPath(): string {
+  return join(process.cwd(), 'brain-data', 'big-bible', 'repos');
+}
+
+function cloneRepo(url: string): { success: boolean; repoName: string; path: string; message: string } {
+  const clean = url.replace(/\.git$/, '').trim();
+  const repoName = clean.split('/').pop() ?? 'repo';
+  const reposDir = getRepoBrainPath();
+  const targetPath = join(reposDir, repoName);
+
+  mkdirSync(reposDir, { recursive: true });
+
+  if (existsSync(targetPath)) {
+    return { success: true, repoName, path: targetPath, message: `Already in library: ${repoName}` };
+  }
+
+  try {
+    execSync(`git clone --depth=1 "${clean}" "${targetPath}"`, { timeout: 120_000, stdio: 'pipe' });
+    return { success: true, repoName, path: targetPath, message: `Cloned ${repoName} → brain-data/big-bible/repos/${repoName}` };
+  } catch (err: any) {
+    return { success: false, repoName, path: targetPath, message: `Clone failed: ${err.message ?? String(err)}` };
+  }
+}
+
+app.post('/repo/clone', async (c) => {
+  const body = await c.req.json<{ url: string }>();
+  if (!body?.url) return c.json({ error: 'Missing url' }, 400);
+  const isGithub = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+/.test(body.url);
+  if (!isGithub) return c.json({ error: 'Only GitHub URLs are supported' }, 400);
+  const result = cloneRepo(body.url);
+  return c.json(result, result.success ? 200 : 500);
+});
+
+app.get('/repos', (c) => {
+  const reposDir = getRepoBrainPath();
+  if (!existsSync(reposDir)) return c.json([]);
+  const repos = readdirSync(reposDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => ({ name: d.name, path: join(reposDir, d.name) }));
+  return c.json(repos);
+});
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
 app.post('/chat', async (c) => {
   const body = await c.req.json<{ messages: ChatMessage[]; task?: string }>();
   if (!body?.messages?.length) return c.json({ error: 'Missing messages' }, 400);
@@ -200,6 +247,19 @@ app.post('/chat', async (c) => {
     const catPath = join(libraryPath, cat);
     if (existsSync(catPath)) {
       readdirSync(catPath).filter((f) => f.endsWith('.md')).forEach((f) => bookList.push(`${cat}/${f}`));
+    }
+  }
+
+  // Auto-detect repo clone intent in the last user message
+  let cloneNote = '';
+  const lastMsg = body.messages[body.messages.length - 1]?.content ?? '';
+  const githubUrl = lastMsg.match(/https?:\/\/(?:www\.)?github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?/i)?.[0];
+  const cloneIntent = /\b(clone|download|add|get|fetch|grab|save|pull)\b/i.test(lastMsg);
+  if (githubUrl && cloneIntent) {
+    const result = cloneRepo(githubUrl);
+    cloneNote = `\n\nACTION TAKEN: ${result.message}`;
+    if (result.success) {
+      cloneNote += `\nRepo is now saved at brain-data/big-bible/repos/${result.repoName} on the user's machine.`;
     }
   }
 
@@ -226,17 +286,17 @@ ${bookList.map((b) => `  • ${b}`).join('\n')}
 WHAT YOU CAN DO:
 - Answer coding questions using library patterns
 - Analyze tasks for risk, domains, and required books
-- Give exact terminal commands (git clone, npm install, etc.)
+- Download and save repos automatically when user provides a GitHub URL (already handled server-side)
 - Help plan projects using the user's proven patterns
-- Tell the user exactly which repos to clone and why
+- Tell the user exactly which repos to add and why
 
-WHEN ASKED TO "DOWNLOAD A REPO":
-Give the exact command: git clone <url>
-Do NOT say you cannot download — give the command and tell them to run it.
+WHEN A REPO WAS JUST CLONED:
+Tell the user it's saved in brain-data/big-bible/repos/ and what they can do with it next.
+Be direct: "Done. Cloned X to your library."
 
 WHEN ASKED ABOUT YOUR CAPABILITIES:
 Explain what you ARE (a local library AI with their knowledge) not what you aren't.
-${taskSection}`;
+${taskSection}${cloneNote}`;
 
   const messages = [{ role: 'system' as const, content: systemPrompt }, ...body.messages];
   const response = await routeChat(messages);
