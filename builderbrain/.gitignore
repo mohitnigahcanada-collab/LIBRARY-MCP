@@ -1,5 +1,7 @@
 brain-data/config.json
 brain-data/runs/
+brain-data/big-bible/
+brain-data/library/discovered/
 dist/
 node_modules/
 *.local
