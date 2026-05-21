@@ -1,5 +1,7 @@
 # LIBRARY-MCP
 
+![BuilderBrain Hero Banner](images/builderbrain-hero.jpg)
+
 **BuilderBrain** — Your Local-First Personal AI Engineering Brain
 
 A powerful, private, local-first AI assistant that runs entirely on your machine. It combines a rich personal knowledge library with intelligent agents, multi-AI chat, automatic repo cloning, and MCP (Model Context Protocol) support.
@@ -8,47 +10,37 @@ A powerful, private, local-first AI assistant that runs entirely on your machine
 
 BuilderBrain is like having a **super-smart coding partner and personal librarian** living on your laptop.
 
-It knows your personal "books" (curated knowledge, rules, past lessons, and your working style). When you give it a task, it:
-
-- Classifies the task across 14 domains
-- Picks the most relevant knowledge from your library
-- Assesses risk and confidence
-- Builds rich context packs for other AIs (Claude, Cursor, etc.)
-- Can **automatically clone GitHub repositories** when you mention them in chat
-- Learns from every interaction and remembers how *you* like to work
+It knows your personal "books" (curated knowledge, rules, past lessons, and your working style). When you give it a task, it classifies the task, picks the right books, checks risk, builds smart context, and can even **automatically clone GitHub repos** from chat. It also learns and remembers how *you* like to work.
 
 One app. One port (`http://localhost:8765`). Multiple powerful modes.
+
+![How BuilderBrain Works](images/how-it-works.jpg)
 
 ## ✨ Key Features
 
 - **🧠 Intelligent Context Engine** — 14-domain classifier + book router + risk scorer
-- **📚 Personal Knowledge Library** — 20+ seeded books across pocket-rules, mini-books, self-learning, and user-style
-- **💬 Smart Multi-AI Chat** — Strong persistent system prompt, auto repo cloning, suggestion chips
-- **🤖 Agentic Workflows** — Proposal engine with approval gates, self-learning memory
-- **🖥️ Beautiful React Dashboard** — 6 modes: Agent · Chat · Research · Library · Ops · Settings
-- **🔌 MCP Ready** — Exposes tools via Model Context Protocol skeleton
-- **📥 One-Click Repo Cloning** — Paste a GitHub URL in chat → it clones automatically
-- **🚀 Cross-Platform Launchers** — One-click start on Windows, macOS, Linux
-- **🔒 Fully Local & Private** — Your data never leaves your machine (API keys stored locally)
+- **📚 Personal Knowledge Library** — 20+ seeded books
+- **💬 Smart Multi-AI Chat** — Strong system prompt + auto repo cloning
+- **🤖 Agentic Workflows** — Proposal engine + self-learning memory
+- **🖥️ Beautiful React Dashboard** — 6 clean modes
+- **🔌 MCP Ready** — Works with the new Model Context Protocol
+- **📥 One-Click Repo Cloning** — Just paste a GitHub link in chat
+- **🚀 Cross-Platform Launchers** — Works on Windows, macOS, Linux
+- **🔒 Fully Local & Private**
 
 ## 🏃 Quick Start
 
 ### One-Click Launch (Recommended)
 
 ```bash
-# Clone the repo
 git clone https://github.com/mohitnigahcanada-collab/LIBRARY-MCP.git
 cd LIBRARY-MCP
 
-# Linux / Arch / CachyOS
-chmod +x LaunchBrain.sh
-./LaunchBrain.sh
+# Linux
+chmod +x LaunchBrain.sh && ./LaunchBrain.sh
 
-# macOS
-# Double-click LaunchBrain.command
-
-# Windows
-# Double-click LaunchBrain.bat
+# macOS → double-click LaunchBrain.command
+# Windows → double-click LaunchBrain.bat
 ```
 
 ### Manual Start
@@ -60,98 +52,79 @@ npm run build:all
 npm start
 ```
 
-Then open **http://localhost:8765**
+Open **http://localhost:8765**
 
 ## 🧭 The 6 Modes
 
-| Mode       | What it does                                      |
-|------------|---------------------------------------------------|
-| **Agent**  | Task proposals, context packs, risk assessment    |
-| **Chat**   | Natural conversation with full library context + auto-cloning |
-| **Research** | (Coming soon) Web + GitHub search               |
-| **Library**  | Browse and manage your knowledge books + cloned repos |
-| **Ops**    | Logs, analytics, backend management               |
-| **Settings** | Configure API keys, preferences                 |
+| Mode       | What it does |
+|------------|--------------|
+| **Agent**  | Task proposals, context packs, risk assessment |
+| **Chat**   | Natural conversation + auto repo cloning |
+| **Research** | (Coming soon) Web + GitHub search |
+| **Library**  | Browse books + cloned repos |
+| **Ops**    | Logs, analytics, backend |
+| **Settings** | API keys & preferences |
 
-## 🏗️ Architecture Overview
+![BuilderBrain Dashboard Preview](images/dashboard-preview.jpg)
+
+## 🏗️ Architecture
 
 ```
 LIBRARY-MCP/
 ├── builderbrain/
-│   ├── src/
-│   │   ├── api/          # Hono REST API (port 8765)
-│   │   ├── cli/          # `brain` command line tool
-│   │   ├── engines/      # classifier, bookRouter, risk, context, proposal, aiRouter
-│   │   ├── memory/       # self-learning + user style
-│   │   └── mcp/          # Model Context Protocol tools
-│   ├── dashboard/        # React + Vite frontend
-│   └── brain-data/       # Your private library + cloned repos + logs
-├── LaunchBrain.*         # Cross-platform launchers
-└── PROGRESS.md           # Detailed development log
+│   ├── src/          # API, CLI, engines, memory, MCP
+│   ├── dashboard/    # React frontend
+│   └── brain-data/   # Your private library + cloned repos
+├── LaunchBrain.*     # One-click launchers
+└── PROGRESS.md       # Full development log
 ```
 
-## 🔌 MCP Tools (Current)
+## 🔌 Current MCP Tools
 
 - `brain_context_pack`
 - `brain_propose`
 - `brain_save_lesson`
 - `brain_status`
 
-More coming as the project evolves.
+## 📡 Main API Endpoints
 
-## 📡 API Highlights
-
-| Endpoint          | Method | Description                     |
-|-------------------|--------|---------------------------------|
-| `/health`         | GET    | Health check                    |
-| `/status`         | GET    | Books, runs, lessons stats      |
-| `/context`        | POST   | Build rich context pack         |
-| `/propose`        | POST   | Generate task proposal + risk   |
-| `/chat`           | POST   | Chat with auto repo cloning     |
-| `/repo/clone`     | POST   | Manually clone a GitHub repo    |
-| `/learn`          | POST   | Save a lesson to memory         |
-
-Full details in `PROGRESS.md`
+| Endpoint       | Method | Purpose                     |
+|----------------|--------|-----------------------------|
+| `/health`      | GET    | Health check                |
+| `/status`      | GET    | Stats                       |
+| `/context`     | POST   | Build context pack          |
+| `/propose`     | POST   | Task proposal + risk        |
+| `/chat`        | POST   | Chat with auto-cloning      |
+| `/repo/clone`  | POST   | Clone any GitHub repo       |
 
 ## 🛠️ Tech Stack
 
-- **Backend**: TypeScript, Hono, Node.js
-- **Frontend**: React + Vite + Tailwind (dark theme)
-- **AI**: Vercel AI SDK (supports OpenAI, Anthropic, and any OpenAI-compatible provider)
-- **Testing**: Vitest (34 tests passing)
-- **CLI**: Commander.js
-- **MCP**: Custom skeleton (expanding)
+TypeScript • Hono • React + Vite • Vercel AI SDK • Vitest • Commander
 
-## 🔮 Roadmap (High Priority)
+## 🔮 Roadmap (Next Big Things)
 
-- Daily trend radar + Telegram alerts
-- Task queue system with execution
-- Real Research mode (Brave/Tavily)
-- Library mode improvements (show cloned repos)
+- Daily trend radar + alerts
+- Task queue system
+- Real Research mode
 - Auto repo analysis after cloning
-- Better RAG (PageIndex or vector)
-- Systemd service for auto-start
+- Better memory & RAG
 
-See `PROGRESS.md` for the full living roadmap.
+See `PROGRESS.md` for the full list.
 
 ## 🤝 Contributing
 
-This is currently a personal project, but ideas and improvements are welcome!
-
-1. Fork the repo
-2. Create a feature branch
-3. Make your changes (keep tests passing)
-4. Open a Pull Request
+Ideas and improvements are welcome!  
+Fork → Branch → Pull Request
 
 ## 📄 License
 
-Currently unlicensed (personal project). Feel free to reach out if you'd like to discuss.
+Currently unlicensed (personal project).
 
-## 🙏 Credits & Inspiration
+## 🙏 Built with ❤️ by Mohit Nigah
 
-Built with ❤️ by Mohit Nigah  
-Inspired by the new Model Context Protocol (MCP), local-first AI movement, and the desire for a truly personal coding brain that remembers *you*.
+Inspired by the Model Context Protocol and the dream of a truly personal AI brain that remembers you.
 
 ---
 
-**Ready to build smarter?** Start the brain and say hello at `http://localhost:8765`
+**Ready to build smarter?**  
+Start the brain → `http://localhost:8765`
