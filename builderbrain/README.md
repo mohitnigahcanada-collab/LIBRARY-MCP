@@ -20,7 +20,7 @@ Before any AI agent codes, BuilderBrain:
 cd builderbrain
 npm install
 npm run build
-npm link  # makes `brain` available globally
+npm link  # makes `brain` and `brain-mcp` available globally
 ```
 
 ## CLI Commands
@@ -50,6 +50,9 @@ Start: `brain serve` or `npm run serve`
 | GET    | /runs/:id      | Single run log                       |
 | POST   | /context       | Build context pack `{ task }`        |
 | POST   | /propose       | Generate proposal `{ task }`         |
+| POST   | /chat          | Chat with configured AI backends     |
+| GET    | /chat/history  | List persisted conversation history   |
+| GET    | /chat/history/:id | Get a conversation transcript      |
 | POST   | /learn         | Save lesson `{ task, problem, rootCause, solution, evidence }` |
 
 ## MCP Tools
@@ -62,6 +65,43 @@ Four tools are available for MCP clients:
 | `brain_propose` | Generate a proposal with risk/confidence |
 | `brain_save_lesson` | Save a lesson to self-learning memory |
 | `brain_status` | Get system status |
+
+## Real MCP Server (stdio)
+
+Run it directly:
+
+```bash
+npm run dev:mcp
+```
+
+Or after build:
+
+```bash
+brain-mcp
+```
+
+### OpenCode setup (local MCP)
+
+Add this to your OpenCode config under `mcp`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "builderbrain": {
+      "type": "local",
+      "command": ["brain-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Then verify:
+
+```bash
+opencode mcp list
+```
 
 ## Knowledge Library Structure
 
@@ -111,7 +151,7 @@ npm run build     # TypeScript compile
 
 ## v1 Scope
 
-**Included**: CLI, local API, MCP skeleton, markdown knowledge library, context pack builder, proposal engine, risk/confidence scoring, self-learning memory, user-style memory, run logs, Vitest tests.
+**Included**: CLI, local API, real stdio MCP server, markdown knowledge library, context pack builder, proposal engine, risk/confidence scoring, self-learning memory, user-style memory, run logs, Vitest tests.
 
 **Excluded (v2+)**: GitHub repo cloning, vector DB, Google Drive sync, cloud deployment, full multi-agent orchestration.
 

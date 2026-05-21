@@ -1,0 +1,765 @@
+[
+  {
+    "id": "saas-product-systems",
+    "name": "Saas Product Systems",
+    "description": "saas product systems systems and practical implementation patterns.",
+    "searchTerms": [
+      "saas product systems"
+    ],
+    "topics": [
+      "saas",
+      "product",
+      "systems"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "frontend-engineering",
+    "name": "Frontend Engineering",
+    "description": "frontend engineering systems and practical implementation patterns.",
+    "searchTerms": [
+      "frontend engineering"
+    ],
+    "topics": [
+      "frontend",
+      "engineering"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "backend-engineering",
+    "name": "Backend Engineering",
+    "description": "backend engineering systems and practical implementation patterns.",
+    "searchTerms": [
+      "backend engineering"
+    ],
+    "topics": [
+      "backend",
+      "engineering"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "database-storage",
+    "name": "Database Storage",
+    "description": "database storage systems and practical implementation patterns.",
+    "searchTerms": [
+      "database storage"
+    ],
+    "topics": [
+      "database",
+      "storage"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "ai-app-systems",
+    "name": "Ai App Systems",
+    "description": "ai app systems systems and practical implementation patterns.",
+    "searchTerms": [
+      "ai app systems"
+    ],
+    "topics": [
+      "ai",
+      "app",
+      "systems"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "ai-agent-frameworks",
+    "name": "Ai Agent Frameworks",
+    "description": "Agent systems, tool use, planning, memory, orchestration.",
+    "searchTerms": [
+      "ai agent framework",
+      "langgraph",
+      "autogen",
+      "crewai",
+      "openhands",
+      "mcp server",
+      "model context protocol"
+    ],
+    "topics": [
+      "ai-agents",
+      "llm",
+      "agent-framework"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "rag-knowledge-systems",
+    "name": "Rag Knowledge Systems",
+    "description": "rag knowledge systems systems and practical implementation patterns.",
+    "searchTerms": [
+      "rag knowledge systems"
+    ],
+    "topics": [
+      "rag",
+      "knowledge",
+      "systems"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "data-engineering",
+    "name": "Data Engineering",
+    "description": "data engineering systems and practical implementation patterns.",
+    "searchTerms": [
+      "data engineering"
+    ],
+    "topics": [
+      "data",
+      "engineering"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "cloud-devops-infra",
+    "name": "Cloud Devops Infra",
+    "description": "cloud devops infra systems and practical implementation patterns.",
+    "searchTerms": [
+      "cloud devops infra"
+    ],
+    "topics": [
+      "cloud",
+      "devops",
+      "infra"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "observability-reliability",
+    "name": "Observability Reliability",
+    "description": "observability reliability systems and practical implementation patterns.",
+    "searchTerms": [
+      "observability reliability"
+    ],
+    "topics": [
+      "observability",
+      "reliability"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "security-engineering",
+    "name": "Security Engineering",
+    "description": "security engineering systems and practical implementation patterns.",
+    "searchTerms": [
+      "security engineering"
+    ],
+    "topics": [
+      "security",
+      "engineering"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "testing-quality",
+    "name": "Testing Quality",
+    "description": "testing quality systems and practical implementation patterns.",
+    "searchTerms": [
+      "testing quality"
+    ],
+    "topics": [
+      "testing",
+      "quality"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "browser-desktop-automation",
+    "name": "Browser Desktop Automation",
+    "description": "browser desktop automation systems and practical implementation patterns.",
+    "searchTerms": [
+      "browser desktop automation"
+    ],
+    "topics": [
+      "browser",
+      "desktop",
+      "automation"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "mobile-cross-platform",
+    "name": "Mobile Cross Platform",
+    "description": "mobile cross platform systems and practical implementation patterns.",
+    "searchTerms": [
+      "mobile cross platform"
+    ],
+    "topics": [
+      "mobile",
+      "cross",
+      "platform"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "ai-model-engineering",
+    "name": "Ai Model Engineering",
+    "description": "ai model engineering systems and practical implementation patterns.",
+    "searchTerms": [
+      "ai model engineering"
+    ],
+    "topics": [
+      "ai",
+      "model",
+      "engineering"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "computer-vision-media-ai",
+    "name": "Computer Vision Media Ai",
+    "description": "computer vision media ai systems and practical implementation patterns.",
+    "searchTerms": [
+      "computer vision media ai"
+    ],
+    "topics": [
+      "computer",
+      "vision",
+      "media"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "voice-speech-audio",
+    "name": "Voice Speech Audio",
+    "description": "voice speech audio systems and practical implementation patterns.",
+    "searchTerms": [
+      "voice speech audio"
+    ],
+    "topics": [
+      "voice",
+      "speech",
+      "audio"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "robotics-iot-hardware",
+    "name": "Robotics Iot Hardware",
+    "description": "robotics iot hardware systems and practical implementation patterns.",
+    "searchTerms": [
+      "robotics iot hardware"
+    ],
+    "topics": [
+      "robotics",
+      "iot",
+      "hardware"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "simulation-digital-twins",
+    "name": "Simulation Digital Twins",
+    "description": "simulation digital twins systems and practical implementation patterns.",
+    "searchTerms": [
+      "simulation digital twins"
+    ],
+    "topics": [
+      "simulation",
+      "digital",
+      "twins"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "scientific-computing",
+    "name": "Scientific Computing",
+    "description": "scientific computing systems and practical implementation patterns.",
+    "searchTerms": [
+      "scientific computing"
+    ],
+    "topics": [
+      "scientific",
+      "computing"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "finance-trading",
+    "name": "Finance Trading",
+    "description": "finance trading systems and practical implementation patterns.",
+    "searchTerms": [
+      "finance trading"
+    ],
+    "topics": [
+      "finance",
+      "trading"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "blockchain-web3",
+    "name": "Blockchain Web3",
+    "description": "blockchain web3 systems and practical implementation patterns.",
+    "searchTerms": [
+      "blockchain web3"
+    ],
+    "topics": [
+      "blockchain",
+      "web3"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "game-development",
+    "name": "Game Development",
+    "description": "game development systems and practical implementation patterns.",
+    "searchTerms": [
+      "game development"
+    ],
+    "topics": [
+      "game",
+      "development"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "collaboration-communication",
+    "name": "Collaboration Communication",
+    "description": "collaboration communication systems and practical implementation patterns.",
+    "searchTerms": [
+      "collaboration communication"
+    ],
+    "topics": [
+      "collaboration",
+      "communication"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "search-indexing-recommendation",
+    "name": "Search Indexing Recommendation",
+    "description": "search indexing recommendation systems and practical implementation patterns.",
+    "searchTerms": [
+      "search indexing recommendation"
+    ],
+    "topics": [
+      "search",
+      "indexing",
+      "recommendation"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "workflow-automation",
+    "name": "Workflow Automation",
+    "description": "workflow automation systems and practical implementation patterns.",
+    "searchTerms": [
+      "workflow automation"
+    ],
+    "topics": [
+      "workflow",
+      "automation"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "api-integrations",
+    "name": "Api Integrations",
+    "description": "api integrations systems and practical implementation patterns.",
+    "searchTerms": [
+      "api integrations"
+    ],
+    "topics": [
+      "api",
+      "integrations"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "design-creative-tools",
+    "name": "Design Creative Tools",
+    "description": "design creative tools systems and practical implementation patterns.",
+    "searchTerms": [
+      "design creative tools"
+    ],
+    "topics": [
+      "design",
+      "creative",
+      "tools"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "education-learning",
+    "name": "Education Learning",
+    "description": "education learning systems and practical implementation patterns.",
+    "searchTerms": [
+      "education learning"
+    ],
+    "topics": [
+      "education",
+      "learning"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "business-operations",
+    "name": "Business Operations",
+    "description": "business operations systems and practical implementation patterns.",
+    "searchTerms": [
+      "business operations"
+    ],
+    "topics": [
+      "business",
+      "operations"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "legal-compliance-governance",
+    "name": "Legal Compliance Governance",
+    "description": "legal compliance governance systems and practical implementation patterns.",
+    "searchTerms": [
+      "legal compliance governance"
+    ],
+    "topics": [
+      "legal",
+      "compliance",
+      "governance"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "geospatial-mapping",
+    "name": "Geospatial Mapping",
+    "description": "geospatial mapping systems and practical implementation patterns.",
+    "searchTerms": [
+      "geospatial mapping"
+    ],
+    "topics": [
+      "geospatial",
+      "mapping"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "low-level-systems",
+    "name": "Low Level Systems",
+    "description": "low level systems systems and practical implementation patterns.",
+    "searchTerms": [
+      "low level systems"
+    ],
+    "topics": [
+      "low",
+      "level",
+      "systems"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "performance-engineering",
+    "name": "Performance Engineering",
+    "description": "performance engineering systems and practical implementation patterns.",
+    "searchTerms": [
+      "performance engineering"
+    ],
+    "topics": [
+      "performance",
+      "engineering"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "docs-devex",
+    "name": "Docs Devex",
+    "description": "docs devex systems and practical implementation patterns.",
+    "searchTerms": [
+      "docs devex",
+      "developer experience",
+      "docs tooling",
+      "sdk docs",
+      "mcp docs"
+    ],
+    "topics": [
+      "docs",
+      "devex"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "cli-terminal-tools",
+    "name": "Cli Terminal Tools",
+    "description": "cli terminal tools systems and practical implementation patterns.",
+    "searchTerms": [
+      "cli terminal tools",
+      "cli tool",
+      "terminal automation",
+      "command line",
+      "mcp cli"
+    ],
+    "topics": [
+      "cli",
+      "terminal",
+      "tools"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "local-first-apps",
+    "name": "Local First Apps",
+    "description": "local first apps systems and practical implementation patterns.",
+    "searchTerms": [
+      "local first apps"
+    ],
+    "topics": [
+      "local",
+      "first",
+      "apps"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "ai-coding-agents",
+    "name": "Ai Coding Agents",
+    "description": "ai coding agents systems and practical implementation patterns.",
+    "searchTerms": [
+      "ai coding agents",
+      "coding agent",
+      "code assistant",
+      "ai coding",
+      "repo intelligence"
+    ],
+    "topics": [
+      "ai",
+      "coding",
+      "agents"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "prompt-eval-observability",
+    "name": "Prompt Eval Observability",
+    "description": "prompt eval observability systems and practical implementation patterns.",
+    "searchTerms": [
+      "prompt eval observability"
+    ],
+    "topics": [
+      "prompt",
+      "eval",
+      "observability"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "dataset-synthetic-data",
+    "name": "Dataset Synthetic Data",
+    "description": "dataset synthetic data systems and practical implementation patterns.",
+    "searchTerms": [
+      "dataset synthetic data"
+    ],
+    "topics": [
+      "dataset",
+      "synthetic",
+      "data"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "web-scraping-crawling",
+    "name": "Web Scraping Crawling",
+    "description": "web scraping crawling systems and practical implementation patterns.",
+    "searchTerms": [
+      "web scraping crawling"
+    ],
+    "topics": [
+      "web",
+      "scraping",
+      "crawling"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "file-document-processing",
+    "name": "File Document Processing",
+    "description": "file document processing systems and practical implementation patterns.",
+    "searchTerms": [
+      "file document processing"
+    ],
+    "topics": [
+      "file",
+      "document",
+      "processing"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "knowledge-graphs",
+    "name": "Knowledge Graphs",
+    "description": "knowledge graphs systems and practical implementation patterns.",
+    "searchTerms": [
+      "knowledge graphs"
+    ],
+    "topics": [
+      "knowledge",
+      "graphs"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "monorepo-build-systems",
+    "name": "Monorepo Build Systems",
+    "description": "monorepo build systems systems and practical implementation patterns.",
+    "searchTerms": [
+      "monorepo build systems"
+    ],
+    "topics": [
+      "monorepo",
+      "build",
+      "systems"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  },
+  {
+    "id": "open-source-infra-governance",
+    "name": "Open Source Infra Governance",
+    "description": "open source infra governance systems and practical implementation patterns.",
+    "searchTerms": [
+      "open source infra governance"
+    ],
+    "topics": [
+      "open",
+      "source",
+      "infra"
+    ],
+    "preferredLanguages": [
+      "TypeScript",
+      "Python"
+    ]
+  }
+]

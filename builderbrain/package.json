@@ -4,7 +4,8 @@
   "description": "Local-first AI engineering brain — context, proposals, memory, and verified execution",
   "type": "module",
   "bin": {
-    "brain": "./dist/cli/index.js"
+    "brain": "./dist/cli/index.js",
+    "brain-mcp": "./dist/mcp/server.js"
   },
   "scripts": {
     "build": "tsc",
@@ -12,6 +13,7 @@
     "build:all": "npm run build && npm run build:dashboard",
     "dev": "tsx src/cli/index.ts",
     "dev:dashboard": "vite",
+    "dev:mcp": "tsx src/mcp/server.ts",
     "serve": "tsx src/api/index.ts",
     "start": "tsx src/api/index.ts",
     "test": "vitest run",
@@ -21,11 +23,13 @@
     "@ai-sdk/anthropic": "^1.0.0",
     "@ai-sdk/openai": "^1.0.0",
     "@hono/node-server": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "ai": "^4.0.0",
     "better-sqlite3": "^9.0.0",
     "commander": "^12.1.0",
     "hono": "^4.4.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

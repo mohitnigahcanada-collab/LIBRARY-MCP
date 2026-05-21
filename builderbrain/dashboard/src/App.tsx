@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { api, type ChatMessage, type StatusResponse, type RunLog, type Config, type AIBackend } from './api'
+import { api, type ChatMessage, type StatusResponse, type RunLog, type Config, type AIBackend, type RepoMetadata, type RepoDetails } from './api'
 
 type Mode = 'agent' | 'chat' | 'research' | 'library' | 'ops' | 'settings'
 
@@ -67,7 +67,7 @@ function AgentMode({ status }: { status: StatusResponse | null }) {
         <div>&nbsp;&nbsp;"mcpServers": {'{'}</div>
         <div>&nbsp;&nbsp;&nbsp;&nbsp;"builderbrain": {'{'}</div>
         <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"command": "node",</div>
-        <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"args": ["/path/to/builderbrain/dist/mcp/index.js"]</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"args": ["/path/to/builderbrain/dist/mcp/server.js"]</div>
         <div>&nbsp;&nbsp;&nbsp;&nbsp;{'}'}</div>
         <div>&nbsp;&nbsp;{'}'}</div>
         <div>{'}'}</div>
@@ -109,6 +109,14 @@ interface ContextMeta {
   backend?: string
   model?: string
   tokens?: number
+  ensembleMembers?: Array<{
+    backend: string
+    model: string
+    ok: boolean
+    tokens?: number
+    error?: string
+    text: string
+  }>
 }
 
 interface Conversation {
@@ -140,6 +148,7 @@ function ChatMode() {
   const [taskInput, setTaskInput] = useState('')
   const [activeTask, setActiveTask] = useState<string | undefined>(undefined)
   const [meta, setMeta] = useState<ContextMeta | null>(null)
+  const [ensembleEnabled, setEnsembleEnabled] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -192,14 +201,27 @@ function ChatMode() {
         } catch { /* ignore */ }
       }
 
-      const response = await api.chat(newMessages, activeTask)
+      const requestConversationId = activeId ?? `conv_${Date.now()}`
+      const response = await api.chat(newMessages, activeTask, requestConversationId, {
+        ensemble: ensembleEnabled,
+        ensembleCount: 3,
+      })
       const finalMessages = [...newMessages, { role: 'assistant' as const, content: response.text }]
       setMessages(finalMessages)
-      setMeta({ domains, risk, confidence, books, backend: response.backend, model: response.model, tokens: response.tokens })
+      setMeta({
+        domains,
+        risk,
+        confidence,
+        books,
+        backend: response.backend,
+        model: response.model,
+        tokens: response.tokens,
+        ensembleMembers: response.ensemble?.members,
+      })
 
       // Persist to conversation history
       const title = userMsg.content.slice(0, 60)
-      const id = activeId ?? `conv_${Date.now()}`
+      const id = response.conversationId ?? requestConversationId
       const conv: Conversation = { id, title, messages: finalMessages, timestamp: Date.now() }
       const updated = [conv, ...conversations.filter((c) => c.id !== id)]
       setConversations(updated)
@@ -210,7 +232,7 @@ function ChatMode() {
     } finally {
       setLoading(false)
     }
-  }, [input, loading, messages, activeTask, activeId, conversations])
+  }, [input, loading, messages, activeTask, activeId, conversations, ensembleEnabled])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
@@ -257,6 +279,10 @@ function ChatMode() {
           <span style={{ fontSize: 20 }}>💬</span>
           <h2>Chat with BuilderBrain</h2>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+              <input type="checkbox" checked={ensembleEnabled} onChange={(e) => setEnsembleEnabled(e.target.checked)} />
+              3-AI Debate
+            </label>
             <input
               className="form-input"
               style={{ width: 240, fontSize: 12 }}
@@ -351,6 +377,23 @@ function ChatMode() {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{meta.model}{meta.tokens ? ` · ${meta.tokens} tokens` : ''}</div>
               </div>
             )}
+            {meta.ensembleMembers && meta.ensembleMembers.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>DEBATE AGENTS</div>
+                {meta.ensembleMembers.map((m) => (
+                  <div key={`${m.backend}-${m.model}`} style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 0' }}>
+                      {m.ok ? '✓' : '✗'} {m.backend} · {m.model}{m.tokens ? ` · ${m.tokens}t` : ''}{m.error ? ` · ${m.error}` : ''}
+                    </div>
+                    {m.ok && m.text && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.9 }}>
+                        {m.text.slice(0, 180)}{m.text.length > 180 ? '…' : ''}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -417,7 +460,12 @@ function ResearchMode() {
 
 function LibraryMode() {
   const [books, setBooks] = useState<Record<string, string[]>>({})
-  const [repos, setRepos] = useState<Array<{ name: string; path: string }>>([])
+  const [repos, setRepos] = useState<RepoMetadata[]>([])
+  const [selectedRepo, setSelectedRepo] = useState<RepoDetails | null>(null)
+  const [repoUrl, setRepoUrl] = useState('')
+  const [repoTopic, setRepoTopic] = useState('ai-agent-frameworks')
+  const [seedFilePath, setSeedFilePath] = useState('')
+  const [repoBusy, setRepoBusy] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<string | null>(null)
   const [bookContent, setBookContent] = useState<string | null>(null)
@@ -433,6 +481,11 @@ function LibraryMode() {
     }).catch(() => {})
     api.repos().then(setRepos).catch(() => {})
   }, [])
+
+  const refreshRepos = async () => {
+    const list = await api.repos()
+    setRepos(list)
+  }
 
   const openBook = async (cat: string, file: string) => {
     const path = `${cat}/${file}`
@@ -469,9 +522,125 @@ function LibraryMode() {
     )
   }
 
+  if (selectedRepo) {
+    const meta = selectedRepo.metadata
+    return (
+      <div className="content book-viewer">
+        <button className="back-btn" onClick={() => setSelectedRepo(null)}>
+          ← Back to Library
+        </button>
+        <h1>{meta.owner}/{meta.name}</h1>
+        <div className="book-content">
+          <p><b>Status:</b> {meta.status}</p>
+          <p><b>Topic:</b> {meta.topic}</p>
+          <p><b>Path:</b> {meta.localPath}</p>
+          <p><b>Updated:</b> {new Date(meta.updatedAt).toLocaleString()}</p>
+          <p><b>Risk:</b> {selectedRepo.risk?.riskLevel ?? 'n/a'} ({selectedRepo.risk?.riskScore ?? 0})</p>
+          <p><b>Score:</b> {selectedRepo.score?.qualityScore ?? 'n/a'} / 100</p>
+          <p><b>License:</b> {selectedRepo.license?.license ?? selectedRepo.score?.license ?? 'unknown'}</p>
+          {selectedRepo.license?.warning && <p><b>License Warning:</b> {selectedRepo.license.warning}</p>}
+          {selectedRepo.summaryPath && <p><b>Summary:</b> {selectedRepo.summaryPath}</p>}
+          {selectedRepo.digestPath && <p><b>Digest:</b> {selectedRepo.digestPath}</p>}
+          {selectedRepo.risk?.findings && selectedRepo.risk.findings.length > 0 && (
+            <>
+              <h3>Risk Findings</h3>
+              {selectedRepo.risk.findings.slice(0, 20).map((f, idx) => (
+                <div key={`${f.file}-${idx}`}>[{f.severity}] {f.file}: {f.message}</div>
+              ))}
+            </>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button className="btn btn-primary" disabled={repoBusy} onClick={async () => {
+            setRepoBusy(true)
+            try {
+              await api.analyzeRepo(meta.id)
+              const detail = await api.repoDetails(meta.id)
+              setSelectedRepo(detail)
+              await refreshRepos()
+            } finally {
+              setRepoBusy(false)
+            }
+          }}>Analyze</button>
+          <button className="btn btn-ghost" disabled={repoBusy} onClick={async () => {
+            setRepoBusy(true)
+            try {
+              await api.digestRepo(meta.id)
+              const detail = await api.repoDetails(meta.id)
+              setSelectedRepo(detail)
+            } finally {
+              setRepoBusy(false)
+            }
+          }}>Digest</button>
+          <button className="btn btn-ghost" disabled={repoBusy} onClick={async () => {
+            setRepoBusy(true)
+            try {
+              await api.acceptRepo(meta.id)
+              const detail = await api.repoDetails(meta.id)
+              setSelectedRepo(detail)
+              await refreshRepos()
+            } finally {
+              setRepoBusy(false)
+            }
+          }}>Accept</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="content library-container">
       <h2>📚 Library</h2>
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            className="form-input"
+            style={{ flex: 1, minWidth: 320 }}
+            placeholder="https://github.com/owner/repo"
+            value={repoUrl}
+            onChange={(e) => setRepoUrl(e.target.value)}
+          />
+          <input
+            className="form-input"
+            style={{ width: 220 }}
+            placeholder="topic"
+            value={repoTopic}
+            onChange={(e) => setRepoTopic(e.target.value)}
+          />
+          <button className="btn btn-primary" disabled={!repoUrl.trim() || repoBusy} onClick={async () => {
+            setRepoBusy(true)
+            try {
+              await api.addRepo(repoUrl.trim(), repoTopic.trim() || 'general')
+              setRepoUrl('')
+              await refreshRepos()
+            } finally {
+              setRepoBusy(false)
+            }
+          }}>
+            + Add Repo
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <input
+            className="form-input"
+            style={{ flex: 1 }}
+            placeholder="/absolute/path/to/repos.md"
+            value={seedFilePath}
+            onChange={(e) => setSeedFilePath(e.target.value)}
+          />
+          <button className="btn btn-ghost" disabled={!seedFilePath.trim() || repoBusy} onClick={async () => {
+            setRepoBusy(true)
+            try {
+              await api.importMarkdown({ filePath: seedFilePath.trim(), topic: repoTopic.trim() || 'general', autoAnalyze: true })
+              await refreshRepos()
+            } finally {
+              setRepoBusy(false)
+            }
+          }}>
+            Import MD
+          </button>
+        </div>
+      </div>
       {Object.entries(books).map(([cat, files]) => (
         <div key={cat} className="lib-category">
           <div
@@ -496,7 +665,7 @@ function LibraryMode() {
         </div>
       ))}
 
-      {/* Cloned repos section */}
+      {/* Repo intelligence section */}
       <div className="lib-category">
         <div
           className="lib-category-header"
@@ -509,14 +678,24 @@ function LibraryMode() {
         </div>
         {expanded['big-bible'] && repos.length === 0 && (
           <div style={{ padding: '6px 24px', fontSize: 12, color: 'var(--text-muted)' }}>
-            No repos yet. Say "download https://github.com/..." in Chat.
+            No repos yet. Add a GitHub URL above.
           </div>
         )}
         {expanded['big-bible'] && repos.map((repo) => (
-          <div key={repo.name} className="lib-file">
+          <div key={repo.id} className="lib-file" onClick={async () => {
+            setRepoBusy(true)
+            try {
+              const detail = await api.repoDetails(repo.id)
+              setSelectedRepo(detail)
+            } finally {
+              setRepoBusy(false)
+            }
+          }}>
             <span>📦</span>
-            {repo.name}
-            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--green)' }}>cloned</span>
+            {repo.id}
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: repo.status === 'accepted' ? 'var(--green)' : 'var(--text-muted)' }}>
+              {repo.status}
+            </span>
           </div>
         ))}
       </div>
@@ -759,6 +938,109 @@ function SettingsMode() {
             type="number"
             value={config.port}
             onChange={(e) => setConfig({ ...config, port: Number(e.target.value) })}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Library Folder Override</label>
+          <input
+            className="form-input"
+            placeholder="/path/to/library"
+            value={config.library_path_override ?? ''}
+            onChange={(e) => setConfig({ ...config, library_path_override: e.target.value || undefined })}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Warehouse Folder Override</label>
+          <input
+            className="form-input"
+            placeholder="/path/to/warehouse"
+            value={config.warehouse_path_override ?? ''}
+            onChange={(e) => setConfig({ ...config, warehouse_path_override: e.target.value || undefined })}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">3-AI Debate Enabled</label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={Boolean(config.ensemble_enabled)}
+              onChange={(e) => setConfig({ ...config, ensemble_enabled: e.target.checked })}
+            />
+            <span className="slider" />
+          </label>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Debate Agent Count</label>
+          <input
+            className="form-input"
+            type="number"
+            min={2}
+            max={3}
+            value={config.ensemble_agent_count ?? 3}
+            onChange={(e) => setConfig({ ...config, ensemble_agent_count: Number(e.target.value) })}
+          />
+        </div>
+      </section>
+
+      <section style={{ marginBottom: 32 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: 'var(--text-muted)' }}>Auto GitHub Expansion</h3>
+        <div className="form-group">
+          <label className="form-label">Enabled</label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={Boolean(config.auto_expand?.enabled)}
+              onChange={(e) => setConfig({
+                ...config,
+                auto_expand: {
+                  enabled: e.target.checked,
+                  interval_minutes: config.auto_expand?.interval_minutes ?? 180,
+                  categories: config.auto_expand?.categories ?? ['ai-agent-frameworks'],
+                  most_starred: config.auto_expand?.most_starred ?? 10,
+                  fresh: config.auto_expand?.fresh ?? 5,
+                  safe: config.auto_expand?.safe ?? true,
+                },
+              })}
+            />
+            <span className="slider" />
+          </label>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Interval Minutes</label>
+          <input
+            className="form-input"
+            type="number"
+            min={15}
+            value={config.auto_expand?.interval_minutes ?? 180}
+            onChange={(e) => setConfig({
+              ...config,
+              auto_expand: {
+                enabled: config.auto_expand?.enabled ?? false,
+                categories: config.auto_expand?.categories ?? ['ai-agent-frameworks'],
+                most_starred: config.auto_expand?.most_starred ?? 10,
+                fresh: config.auto_expand?.fresh ?? 5,
+                safe: config.auto_expand?.safe ?? true,
+                interval_minutes: Number(e.target.value),
+              },
+            })}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Categories (comma-separated)</label>
+          <input
+            className="form-input"
+            value={(config.auto_expand?.categories ?? ['ai-agent-frameworks']).join(',')}
+            onChange={(e) => setConfig({
+              ...config,
+              auto_expand: {
+                enabled: config.auto_expand?.enabled ?? false,
+                interval_minutes: config.auto_expand?.interval_minutes ?? 180,
+                most_starred: config.auto_expand?.most_starred ?? 10,
+                fresh: config.auto_expand?.fresh ?? 5,
+                safe: config.auto_expand?.safe ?? true,
+                categories: e.target.value.split(',').map((x) => x.trim()).filter(Boolean),
+              },
+            })}
           />
         </div>
       </section>

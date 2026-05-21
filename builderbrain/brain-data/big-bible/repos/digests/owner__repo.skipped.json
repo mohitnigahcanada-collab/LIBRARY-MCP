@@ -1,0 +1,6 @@
+[
+  {
+    "path": ".env",
+    "reason": "secret-env-file"
+  }
+]

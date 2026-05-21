@@ -1,0 +1,27 @@
+{
+  "repoId": "modelcontextprotocol__typescript-sdk",
+  "riskLevel": "Medium",
+  "riskScore": 34,
+  "findings": [
+    {
+      "type": "rm-rf",
+      "file": "scripts/generate-multidoc.sh",
+      "severity": "High",
+      "message": "Contains rm -rf command"
+    },
+    {
+      "type": "eval",
+      "file": "packages/core/src/validators/cfWorkerProvider.ts",
+      "severity": "Medium",
+      "message": "Contains eval usage"
+    },
+    {
+      "type": "sudo",
+      "file": "packages/client/src/client/stdio.ts",
+      "severity": "Medium",
+      "message": "Contains sudo command"
+    }
+  ],
+  "safeToExecute": false,
+  "safeToAnalyzeReadOnly": true
+}

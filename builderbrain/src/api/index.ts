@@ -1,48 +1,135 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { join } from 'path';
-import { readdirSync, existsSync, readFileSync, mkdirSync } from 'fs';
-import { execSync } from 'child_process';
+import { join, resolve } from 'path';
+import { readdirSync, existsSync, readFileSync } from 'fs';
 import { classifyDomains } from '../engines/classifier.js';
 import { selectBookStack } from '../engines/bookRouter.js';
 import { assessRisk, assessConfidence } from '../engines/riskConfidence.js';
 import { buildContextPack } from '../engines/contextPackBuilder.js';
 import { buildProposal } from '../engines/proposalEngine.js';
 import { saveLesson, hasPriorLessons } from '../memory/selfLearning.js';
+import { saveChatTrace, listConversations, getConversationHistory } from '../memory/chatHistory.js';
 import { saveRunLog, listRunLogs, getRunLog } from '../logger.js';
 import { loadConfig, saveConfig } from '../config/manager.js';
-import { routeChat, type ChatMessage } from '../engines/aiRouter.js';
+import { routeChat, routeChatOnBackend, routeChatEnsemble, type ChatMessage } from '../engines/aiRouter.js';
 import { sendAlert } from '../engines/alerts.js';
+import { getAppVersion } from '../version.js';
+import { maskValue } from '../security/sanitize.js';
+import { resolveSafeLibraryMarkdownPath } from '../security/safePath.js';
+import { getLibraryPath } from '../storage/paths.js';
+import {
+  addRepo,
+  analyzeRepo,
+  digestRepo,
+  acceptRepo,
+  listRepos as listRepoMetadata,
+  repoDetails,
+  scoreRepoCard,
+  expandLibraryByCategory,
+  compressCategoryMiniBook,
+  importReposFromMarkdown,
+} from '../repos/service.js';
+import { startAutoExpandWorker } from '../repos/autoExpand.js';
 
 const app = new Hono();
+const APP_VERSION = getAppVersion();
+const LIBRARY_CATEGORIES = ['pocket-rules', 'mini-book', 'self-learning', 'user-style'] as const;
+const WRITE_ACTION_ROUTES = new Set([
+  '/learn',
+  '/config',
+  '/repo/clone',
+  '/alert/test',
+  '/repos/add',
+  '/library/expand',
+  '/library/compress',
+  '/library/import-markdown',
+]);
+const WRITE_ACTION_ROUTE_PATTERNS = [
+  /^\/repos\/[^/]+\/analyze$/,
+  /^\/repos\/[^/]+\/score$/,
+  /^\/repos\/[^/]+\/digest$/,
+  /^\/repos\/[^/]+\/accept$/,
+];
+
+function isWriteActionRoute(path: string): boolean {
+  if (WRITE_ACTION_ROUTES.has(path)) return true;
+  return WRITE_ACTION_ROUTE_PATTERNS.some((p) => p.test(path));
+}
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://127.0.0.1:8765',
+  'http://localhost:8765',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+];
+
+function getAllowedOrigins(): Set<string> {
+  const extra = (process.env.BUILDERBRAIN_CORS_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return new Set([...DEFAULT_ALLOWED_ORIGINS, ...extra]);
+}
+
+function getExpectedApiToken(): string | undefined {
+  const fromEnv = process.env.BUILDERBRAIN_API_TOKEN?.trim();
+  if (fromEnv) return fromEnv;
+  return loadConfig().api_token?.trim();
+}
+
+function requestToken(c: any): string | undefined {
+  const fromHeader = c.req.header('x-api-token')?.trim();
+  if (fromHeader) return fromHeader;
+  const auth = c.req.header('authorization') ?? '';
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  return bearer;
+}
 
 // CORS middleware
 app.use('/*', async (c, next) => {
+  const origin = c.req.header('origin');
+  if (origin && !getAllowedOrigins().has(origin)) {
+    return c.json({ error: 'Origin not allowed' }, 403);
+  }
   await next();
-  c.header('Access-Control-Allow-Origin', '*');
-  c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (origin && getAllowedOrigins().has(origin)) {
+    c.header('Access-Control-Allow-Origin', origin);
+  }
+  c.header('Vary', 'Origin');
+  c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-token');
 });
 
 app.options('/*', (c) => new Response('', { status: 204 }));
 
-function getLibraryPath(): string {
-  return join(process.cwd(), 'brain-data', 'library');
+app.use('/*', async (c, next) => {
+  if (c.req.method === 'POST' && isWriteActionRoute(c.req.path)) {
+    const expected = getExpectedApiToken();
+    if (expected) {
+      const provided = requestToken(c);
+      if (!provided || provided !== expected) {
+        return c.json({ error: 'Unauthorized' }, 401);
+      }
+    }
+  }
+  await next();
+});
+
+function resolveBookPath(bookPath: string): string | null {
+  return resolveSafeLibraryMarkdownPath(getLibraryPath(), bookPath, [...LIBRARY_CATEGORIES]);
 }
 
 app.get('/health', (c) => {
-  return c.json({ ok: true, version: '2.0.0' });
+  return c.json({ ok: true, version: APP_VERSION });
 });
 
 app.get('/status', (c) => {
   const libraryPath = getLibraryPath();
   const runsPath = join(process.cwd(), 'brain-data', 'runs');
-  const categories = ['pocket-rules', 'mini-book', 'self-learning', 'user-style'];
 
   let bookCount = 0;
   const categoryStats: Record<string, number> = {};
-  for (const cat of categories) {
+  for (const cat of LIBRARY_CATEGORIES) {
     const catPath = join(libraryPath, cat);
     const count = existsSync(catPath) ? readdirSync(catPath).filter((f) => f.endsWith('.md')).length : 0;
     categoryStats[cat] = count;
@@ -52,7 +139,7 @@ app.get('/status', (c) => {
   const runCount = existsSync(runsPath) ? readdirSync(runsPath).filter((f) => f.endsWith('.json')).length : 0;
 
   return c.json({
-    version: '2.0.0',
+    version: APP_VERSION,
     status: 'ok',
     books: bookCount,
     runs: runCount,
@@ -63,10 +150,9 @@ app.get('/status', (c) => {
 
 app.get('/books', (c) => {
   const libraryPath = getLibraryPath();
-  const categories = ['pocket-rules', 'mini-book', 'self-learning', 'user-style'];
   const result: Record<string, string[]> = {};
 
-  for (const cat of categories) {
+  for (const cat of LIBRARY_CATEGORIES) {
     const catPath = join(libraryPath, cat);
     result[cat] = existsSync(catPath) ? readdirSync(catPath).filter((f) => f.endsWith('.md')) : [];
   }
@@ -78,7 +164,8 @@ app.get('/book', (c) => {
   const bookPath = c.req.query('path');
   if (!bookPath) return c.json({ error: 'Missing ?path= query param' }, 400);
 
-  const resolved = join(getLibraryPath(), bookPath);
+  const resolved = resolveBookPath(bookPath);
+  if (!resolved) return c.json({ error: 'Invalid book path' }, 400);
   if (!existsSync(resolved)) return c.json({ error: 'Book not found' }, 404);
 
   const content = readFileSync(resolved, 'utf-8');
@@ -87,10 +174,9 @@ app.get('/book', (c) => {
 
 app.get('/library', (c) => {
   const libraryPath = getLibraryPath();
-  const categories = ['pocket-rules', 'mini-book', 'self-learning', 'user-style'];
   const library: Record<string, Record<string, string>> = {};
 
-  for (const cat of categories) {
+  for (const cat of LIBRARY_CATEGORIES) {
     library[cat] = {};
     const catPath = join(libraryPath, cat);
     if (!existsSync(catPath)) continue;
@@ -191,42 +277,14 @@ app.post('/learn', async (c) => {
   return c.json({ success: true, message: 'Lesson saved to self-learning memory' });
 });
 
-// ── Repo clone ────────────────────────────────────────────────────────────────
-
-function getRepoBrainPath(): string {
-  return join(process.cwd(), 'brain-data', 'big-bible', 'repos');
-}
-
-function cloneRepo(url: string): { success: boolean; repoName: string; path: string; message: string } {
-  const clean = url.replace(/\.git$/, '').trim();
-  const repoName = clean.split('/').pop() ?? 'repo';
-  const reposDir = getRepoBrainPath();
-  const targetPath = join(reposDir, repoName);
-
-  mkdirSync(reposDir, { recursive: true });
-
-  if (existsSync(targetPath)) {
-    return { success: true, repoName, path: targetPath, message: `Already in library: ${repoName}` };
-  }
-
-  try {
-    execSync(`git clone --depth=1 "${clean}" "${targetPath}"`, { timeout: 120_000, stdio: 'pipe' });
-    return { success: true, repoName, path: targetPath, message: `Cloned ${repoName} → brain-data/big-bible/repos/${repoName}` };
-  } catch (err: any) {
-    return { success: false, repoName, path: targetPath, message: `Clone failed: ${err.message ?? String(err)}` };
-  }
-}
-
 app.post('/repo/clone', async (c) => {
-  const body = await c.req.json<{ url: string }>();
+  const body = await c.req.json<{ url: string; topic?: string }>();
   if (!body?.url) return c.json({ error: 'Missing url' }, 400);
-  const isGithub = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+/.test(body.url);
-  if (!isGithub) return c.json({ error: 'Only GitHub URLs are supported' }, 400);
-  const result = cloneRepo(body.url);
+  const result = addRepo(body.url, body.topic ?? 'general');
   if (result.success) {
-    sendAlert(`🧠 <b>BuilderBrain</b>\nRepo cloned: <code>${result.repoName}</code>\nSaved to: brain-data/big-bible/repos/${result.repoName}`).catch(() => {});
+    sendAlert(`🧠 <b>BuilderBrain</b>\nRepo added: <code>${result.repoName}</code>\nStatus: quarantined`).catch(() => {});
   }
-  return c.json(result, result.success ? 200 : 500);
+  return c.json(result, result.success ? 200 : 400);
 });
 
 app.post('/alert/test', async (c) => {
@@ -235,24 +293,99 @@ app.post('/alert/test', async (c) => {
 });
 
 app.get('/repos', (c) => {
-  const reposDir = getRepoBrainPath();
-  if (!existsSync(reposDir)) return c.json([]);
-  const repos = readdirSync(reposDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => ({ name: d.name, path: join(reposDir, d.name) }));
-  return c.json(repos);
+  return c.json(listRepoMetadata());
+});
+
+app.post('/repos/add', async (c) => {
+  const body = await c.req.json<{ url: string; topic?: string }>();
+  if (!body?.url) return c.json({ error: 'Missing url' }, 400);
+  const result = addRepo(body.url, body.topic ?? 'general');
+  return c.json(result, result.success ? 200 : 400);
+});
+
+app.get('/repos/:id', (c) => {
+  const id = c.req.param('id');
+  const details = repoDetails(id);
+  if (!details) return c.json({ error: 'Repo not found' }, 404);
+  return c.json(details);
+});
+
+app.post('/repos/:id/analyze', (c) => {
+  const id = c.req.param('id');
+  const result = analyzeRepo(id);
+  return c.json(result, result.success ? 200 : 400);
+});
+
+app.post('/repos/:id/score', (c) => {
+  const id = c.req.param('id');
+  const score = scoreRepoCard(id);
+  if (!score) return c.json({ error: 'Repo not found or scoring failed' }, 404);
+  return c.json(score);
+});
+
+app.post('/repos/:id/digest', (c) => {
+  const id = c.req.param('id');
+  const result = digestRepo(id);
+  return c.json(result, result.success ? 200 : 400);
+});
+
+app.post('/repos/:id/accept', (c) => {
+  const id = c.req.param('id');
+  const result = acceptRepo(id);
+  return c.json(result, result.success ? 200 : 400);
+});
+
+app.post('/library/expand', async (c) => {
+  const body = await c.req.json<{ category: string; mostStarred?: number; fresh?: number; safe?: boolean }>();
+  if (!body?.category) return c.json({ error: 'Missing category' }, 400);
+  const result = await expandLibraryByCategory({
+    category: body.category,
+    mostStarred: body.mostStarred ?? 10,
+    fresh: body.fresh ?? 5,
+    safe: body.safe ?? true,
+  });
+  return c.json(result, result.success ? 200 : 400);
+});
+
+app.post('/library/compress', async (c) => {
+  const body = await c.req.json<{ category: string }>();
+  if (!body?.category) return c.json({ error: 'Missing category' }, 400);
+  const result = compressCategoryMiniBook(body.category);
+  return c.json(result, result.success ? 200 : 400);
+});
+
+app.post('/library/import-markdown', async (c) => {
+  const body = await c.req.json<{ markdown?: string; filePath?: string; topic?: string; autoAnalyze?: boolean }>();
+  if (!body?.markdown && !body?.filePath) {
+    return c.json({ error: 'Provide markdown or filePath' }, 400);
+  }
+  const result = importReposFromMarkdown({
+    markdown: body.markdown,
+    filePath: body.filePath,
+    topic: body.topic ?? 'general',
+    autoAnalyze: body.autoAnalyze ?? true,
+  });
+  return c.json(result, result.success ? 200 : 400);
 });
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 app.post('/chat', async (c) => {
-  const body = await c.req.json<{ messages: ChatMessage[]; task?: string }>();
+  const body = await c.req.json<{
+    messages: ChatMessage[];
+    task?: string;
+    conversationId?: string;
+    collaborate?: boolean;
+    reviewerBackend?: string;
+    ensemble?: boolean;
+    ensembleCount?: number;
+    ensembleBackends?: string[];
+  }>();
   if (!body?.messages?.length) return c.json({ error: 'Missing messages' }, 400);
 
   const libraryPath = getLibraryPath();
-  const categories = ['pocket-rules', 'mini-book', 'self-learning', 'user-style'];
   const bookList: string[] = [];
-  for (const cat of categories) {
+  for (const cat of LIBRARY_CATEGORIES) {
     const catPath = join(libraryPath, cat);
     if (existsSync(catPath)) {
       readdirSync(catPath).filter((f) => f.endsWith('.md')).forEach((f) => bookList.push(`${cat}/${f}`));
@@ -265,10 +398,16 @@ app.post('/chat', async (c) => {
   const githubUrl = lastMsg.match(/https?:\/\/(?:www\.)?github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?/i)?.[0];
   const cloneIntent = /\b(clone|download|add|get|fetch|grab|save|pull)\b/i.test(lastMsg);
   if (githubUrl && cloneIntent) {
-    const result = cloneRepo(githubUrl);
-    cloneNote = `\n\nACTION TAKEN: ${result.message}`;
-    if (result.success) {
-      cloneNote += `\nRepo is now saved at brain-data/big-bible/repos/${result.repoName} on the user's machine.`;
+    const expected = getExpectedApiToken();
+    const provided = requestToken(c);
+    if (!expected || (provided && provided === expected)) {
+      const result = addRepo(githubUrl, 'general');
+      cloneNote = `\n\nACTION TAKEN: ${result.message}`;
+      if (result.success) {
+        cloneNote += `\nRepo is now in quarantine with id ${result.repoId}.`;
+      }
+    } else {
+      cloneNote = '\n\nACTION BLOCKED: Repo cloning requires valid API token.';
     }
   }
 
@@ -308,19 +447,100 @@ Explain what you ARE (a local library AI with their knowledge) not what you aren
 ${taskSection}${cloneNote}`;
 
   const messages = [{ role: 'system' as const, content: systemPrompt }, ...body.messages];
-  const response = await routeChat(messages);
-  return c.json(response);
+  const config = loadConfig();
+  const ensembleEnabled = Boolean(body.ensemble ?? config.ensemble_enabled);
+  const ensemble = ensembleEnabled
+    ? await routeChatEnsemble(messages, {
+      count: body.ensembleCount ?? config.ensemble_agent_count ?? 3,
+      backends: body.ensembleBackends ?? config.ensemble_backend_names ?? [],
+    })
+    : null;
+  const response = ensemble ? ensemble.final : await routeChat(messages);
+  const collaborationEnabled = Boolean(body.collaborate ?? config.collaboration_enabled);
+  const reviewerBackend = body.reviewerBackend ?? config.collaborator_backend;
+
+  let collaborator: { backend: string; model: string; text: string; tokens?: number } | undefined;
+  let finalText = response.text;
+
+  if (!ensemble && collaborationEnabled && reviewerBackend && reviewerBackend !== response.backend) {
+    const reviewMessages: ChatMessage[] = [
+      {
+        role: 'system',
+        content: 'You are a peer-review AI. Improve the primary answer for engineering quality: point out risks, missing checks, and exact file-level next steps. Keep it concise.',
+      },
+      {
+        role: 'user',
+        content: `User message:\n${lastMsg}\n\nPrimary answer:\n${response.text}\n\nReturn an improved answer with concrete next actions.`,
+      },
+    ];
+    const reviewed = await routeChatOnBackend(reviewerBackend, reviewMessages);
+    if (reviewed.backend !== 'error' && reviewed.text.trim()) {
+      collaborator = {
+        backend: reviewed.backend,
+        model: reviewed.model,
+        text: reviewed.text,
+        tokens: reviewed.tokens,
+      };
+      finalText = `${response.text}\n\n---\nPeer Review (${reviewed.backend} / ${reviewed.model}):\n${reviewed.text}`;
+    }
+  }
+
+  const lastUserMessage = body.messages.filter((m) => m.role === 'user').slice(-1)[0]?.content ?? '';
+  const trace = saveChatTrace({
+    conversationId: body.conversationId,
+    task: body.task,
+    userMessage: lastUserMessage,
+    assistantMessage: finalText,
+    backend: response.backend,
+    model: response.model,
+    tokens: (response.tokens ?? 0) + (collaborator?.tokens ?? 0),
+  });
+  return c.json({
+    ...response,
+    text: finalText,
+    tokens: (response.tokens ?? 0) + (collaborator?.tokens ?? 0),
+    conversationId: trace.conversationId,
+    collaborator,
+    ensemble: ensemble ? {
+      strategy: ensemble.strategy,
+      members: ensemble.members.map((m) => ({
+        backend: m.backend,
+        model: m.model,
+        ok: m.ok,
+        tokens: m.tokens,
+        error: m.error,
+        text: m.text,
+      })),
+    } : undefined,
+  });
+});
+
+app.get('/chat/history', (c) => {
+  const limit = Number(c.req.query('limit') ?? 50);
+  return c.json(listConversations(limit));
+});
+
+app.get('/chat/history/:id', (c) => {
+  const id = c.req.param('id');
+  if (!id) return c.json({ error: 'Missing conversation id' }, 400);
+  return c.json(getConversationHistory(id));
 });
 
 app.get('/config', (c) => {
   const config = loadConfig();
-  // Mask API keys: show only first 4 chars + ***
+  // Mask secrets before returning config
   const masked = {
     ...config,
+    api_token: maskValue(config.api_token),
     ai_backends: config.ai_backends.map((b) => ({
       ...b,
-      apiKey: b.apiKey ? b.apiKey.slice(0, 4) + '***' : undefined,
+      apiKey: maskValue(b.apiKey),
     })),
+    alerts: {
+      ...config.alerts,
+      telegram_bot_token: maskValue(config.alerts.telegram_bot_token),
+      slack_webhook: maskValue(config.alerts.slack_webhook),
+    },
   };
   return c.json(masked);
 });
@@ -341,11 +561,12 @@ if (existsSync(dashboardPath)) {
   app.use('/*', serveStatic({ root: './dist/dashboard' }));
 }
 
-export function startServer(port = 8765): void {
-  serve({ fetch: app.fetch, port }, () => {
-    console.log(`BuilderBrain running at http://localhost:${port}`);
-    console.log(`Dashboard: http://localhost:${port}`);
-    console.log(`API: http://localhost:${port}/status`);
+export function startServer(port = 8765, hostname = '127.0.0.1'): void {
+  startAutoExpandWorker();
+  serve({ fetch: app.fetch, port, hostname }, () => {
+    console.log(`BuilderBrain running at http://${hostname}:${port}`);
+    console.log(`Dashboard: http://${hostname}:${port}`);
+    console.log(`API: http://${hostname}:${port}/status`);
   });
 }
 

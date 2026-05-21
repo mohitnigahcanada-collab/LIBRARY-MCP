@@ -3,6 +3,7 @@ import { join } from 'path';
 import { Domain } from './classifier.js';
 import { BookEntry } from './bookRouter.js';
 import { RiskResult, ConfidenceResult } from './riskConfidence.js';
+import { buildRepoContextForTask } from '../repos/context.js';
 
 export interface ContextPack {
   task: string;
@@ -15,6 +16,10 @@ export interface ContextPack {
   recommendedPlan: string;
   testingChecklist: string;
   approvalWarning: string;
+  repoCategories: string[];
+  repoMiniBooks: Array<{ category: string; path: string; content: string }>;
+  repoSummaries: Array<{ repoId: string; path: string; content: string; score: number }>;
+  repoSafetyWarnings: string[];
   risk: RiskResult;
   confidence: ConfidenceResult;
 }
@@ -93,6 +98,8 @@ export function buildContextPack(
     ? `⚠️  APPROVAL REQUIRED — Risk Level: ${risk.level}\nReasons: ${risk.reasons.join('; ')}`
     : `✅ No approval required — Risk Level: ${risk.level}`;
 
+  const repoContext = buildRepoContextForTask(task);
+
   return {
     task,
     detectedDomains: domains,
@@ -104,6 +111,10 @@ export function buildContextPack(
     recommendedPlan,
     testingChecklist,
     approvalWarning,
+    repoCategories: repoContext.categories,
+    repoMiniBooks: repoContext.miniBooks,
+    repoSummaries: repoContext.repoSummaries,
+    repoSafetyWarnings: repoContext.safetyWarnings,
     risk,
     confidence,
   };
@@ -145,5 +156,21 @@ ${pack.recommendedPlan}
 
 ## Testing Checklist
 ${pack.testingChecklist}
+
+## Repo Knowledge Categories
+${pack.repoCategories.length > 0 ? pack.repoCategories.map((c) => `- ${c}`).join('\n') : 'None matched for this task.'}
+
+## Repo Mini Books
+${pack.repoMiniBooks.length > 0
+  ? pack.repoMiniBooks.map((b) => `### ${b.category}\n${b.content}`).join('\n\n')
+  : 'No category mini-books found for this task.'}
+
+## Top Repo Summaries
+${pack.repoSummaries.length > 0
+  ? pack.repoSummaries.map((s) => `### ${s.repoId} (score ${s.score})\n${s.content}`).join('\n\n')
+  : 'No analyzed repo summaries matched.'}
+
+## Repo Safety Warnings
+${pack.repoSafetyWarnings.map((w) => `- ${w}`).join('\n')}
 `;
 }

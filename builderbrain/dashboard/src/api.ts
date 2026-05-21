@@ -19,6 +19,38 @@ export interface ChatResponse {
   backend: string
   model: string
   tokens?: number
+  conversationId?: string
+  ensemble?: {
+    strategy: string
+    members: Array<{
+      backend: string
+      model: string
+      ok: boolean
+      tokens?: number
+      error?: string
+      text: string
+    }>
+  }
+}
+
+export interface RepoMetadata {
+  id: string
+  owner: string
+  name: string
+  url: string
+  topic: string
+  status: string
+  localPath: string
+  updatedAt: string
+}
+
+export interface RepoDetails {
+  metadata: RepoMetadata
+  risk?: { riskLevel?: string; riskScore?: number; findings?: Array<{ file: string; message: string; severity: string }> }
+  score?: { qualityScore?: number; learningValueScore?: number; finalVerdict?: string; license?: string }
+  license?: { license?: string; licenseRisk?: string; warning?: string }
+  summaryPath?: string | null
+  digestPath?: string | null
 }
 
 export interface RunLog {
@@ -47,7 +79,19 @@ export interface Config {
   ai_backends: AIBackend[]
   fallback_strategy: string
   port: number
+  library_path_override?: string
+  warehouse_path_override?: string
+  ensemble_enabled?: boolean
+  ensemble_agent_count?: number
   alerts: Record<string, string>
+  auto_expand?: {
+    enabled: boolean
+    interval_minutes: number
+    categories: string[]
+    most_starred: number
+    fresh: number
+    safe: boolean
+  }
   daily_trends: {
     enabled: boolean
     search_apis: string[]
@@ -80,11 +124,24 @@ export const api = {
   runs: (limit = 20) => get<RunLog[]>(`/runs?limit=${limit}`),
   context: (task: string) => post<unknown>('/context', { task }),
   propose: (task: string) => post<unknown>('/propose', { task }),
-  chat: (messages: ChatMessage[], task?: string) => post<ChatResponse>('/chat', { messages, task }),
+  chat: (
+    messages: ChatMessage[],
+    task?: string,
+    conversationId?: string,
+    options?: { ensemble?: boolean; ensembleCount?: number; ensembleBackends?: string[] }
+  ) => post<ChatResponse>('/chat', { messages, task, conversationId, ...options }),
   getConfig: () => get<Config>('/config'),
   saveConfig: (config: Partial<Config>) => post<{ success: boolean }>('/config', config),
   learn: (lesson: { task: string; problem: string; rootCause: string; solution: string; evidence: string }) =>
     post<{ success: boolean }>('/learn', lesson),
-  cloneRepo: (url: string) => post<{ success: boolean; repoName: string; path: string; message: string }>('/repo/clone', { url }),
-  repos: () => get<Array<{ name: string; path: string }>>('/repos'),
+  cloneRepo: (url: string, topic?: string) => post<{ success: boolean; repoId: string; repoName: string; message: string }>('/repo/clone', { url, topic }),
+  repos: () => get<RepoMetadata[]>('/repos'),
+  addRepo: (url: string, topic?: string) => post<{ success: boolean; repoId: string; message: string }>('/repos/add', { url, topic }),
+  repoDetails: (id: string) => get<RepoDetails>(`/repos/${encodeURIComponent(id)}`),
+  analyzeRepo: (id: string) => post<{ success: boolean; message: string }>(`/repos/${encodeURIComponent(id)}/analyze`, {}),
+  scoreRepo: (id: string) => post<unknown>(`/repos/${encodeURIComponent(id)}/score`, {}),
+  digestRepo: (id: string) => post<{ success: boolean; message: string }>(`/repos/${encodeURIComponent(id)}/digest`, {}),
+  acceptRepo: (id: string) => post<{ success: boolean; message: string }>(`/repos/${encodeURIComponent(id)}/accept`, {}),
+  importMarkdown: (payload: { markdown?: string; filePath?: string; topic?: string; autoAnalyze?: boolean }) =>
+    post<{ success: boolean; message: string; imported: string[]; failed: Array<{ url: string; error: string }> }>('/library/import-markdown', payload),
 }

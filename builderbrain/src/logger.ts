@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Domain } from './engines/classifier.js';
 import { BookEntry } from './engines/bookRouter.js';
 import { RiskLevel, ConfidenceLevel } from './engines/riskConfidence.js';
+import { redactSecrets } from './security/sanitize.js';
 
 export interface RunLog {
   id: string;
@@ -29,6 +30,8 @@ export function saveRunLog(log: Omit<RunLog, 'id' | 'timestamp'>): RunLog {
     id: uuidv4(),
     timestamp: new Date().toISOString(),
     ...log,
+    input: redactSecrets(log.input),
+    summary: redactSecrets(log.summary),
   };
 
   const filePath = join(runsDir, `${entry.id}.json`);

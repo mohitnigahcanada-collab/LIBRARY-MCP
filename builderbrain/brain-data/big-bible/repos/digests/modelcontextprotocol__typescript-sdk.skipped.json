@@ -1,0 +1,14 @@
+[
+  {
+    "path": "pnpm-lock.yaml",
+    "reason": "lockfile-skipped"
+  },
+  {
+    "path": "test/integration/test/server/mcp.test.ts",
+    "reason": "file-too-large"
+  },
+  {
+    "path": "packages/core/test/shared/protocol.test.ts",
+    "reason": "file-too-large"
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "repoId": "modelcontextprotocol__typescript-sdk",
+  "qualityScore": 83,
+  "learningValueScore": 85,
+  "riskLevel": "Medium",
+  "license": "MIT",
+  "strengths": [
+    "README exists",
+    "License: MIT",
+    "Tests present",
+    "Docs present",
+    "Examples present",
+    "Detected frameworks: GitHub Actions, MCP, Vitest"
+  ],
+  "weaknesses": [
+    "Risk level Medium (34)"
+  ],
+  "recommendedUse": [
+    "architecture",
+    "patterns",
+    "testing ideas"
+  ],
+  "doNotUseFor": [
+    "copying code blindly",
+    "executing untrusted scripts"
+  ],
+  "finalVerdict": "Strong reference"
+}

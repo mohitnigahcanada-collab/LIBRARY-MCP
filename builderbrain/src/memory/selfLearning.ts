@@ -1,5 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { sanitizeMemoryText } from '../security/sanitize.js';
+import { getLibraryPath as getConfiguredLibraryPath } from '../storage/paths.js';
 
 export interface Lesson {
   task: string;
@@ -10,7 +12,7 @@ export interface Lesson {
 }
 
 export function getLibraryPath(): string {
-  return join(process.cwd(), 'brain-data', 'library');
+  return getConfiguredLibraryPath();
 }
 
 function getSolvedProblemsPath(): string {
@@ -25,13 +27,21 @@ export function saveLesson(lesson: Lesson): void {
   const existing = existsSync(path) ? readFileSync(path, 'utf-8') : '';
   const date = new Date().toISOString().split('T')[0];
 
+  const safe = {
+    task: sanitizeMemoryText(lesson.task, 200),
+    problem: sanitizeMemoryText(lesson.problem),
+    rootCause: sanitizeMemoryText(lesson.rootCause),
+    solution: sanitizeMemoryText(lesson.solution),
+    evidence: sanitizeMemoryText(lesson.evidence),
+  };
+
   const entry = `
-## [${date}] ${lesson.task.slice(0, 60)}
-**Task**: ${lesson.task}
-**Problem**: ${lesson.problem}
-**Root Cause**: ${lesson.rootCause}
-**Solution**: ${lesson.solution}
-**Evidence**: ${lesson.evidence}
+## [${date}] ${safe.task.slice(0, 60)}
+**Task**: ${safe.task}
+**Problem**: ${safe.problem}
+**Root Cause**: ${safe.rootCause}
+**Solution**: ${safe.solution}
+**Evidence**: ${safe.evidence}
 `;
 
   const updated = existing.includes('_No entries yet')

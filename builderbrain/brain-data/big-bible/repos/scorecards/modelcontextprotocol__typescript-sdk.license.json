@@ -1,0 +1,12 @@
+{
+  "repoId": "modelcontextprotocol__typescript-sdk",
+  "license": "MIT",
+  "licenseRisk": "Low",
+  "copyCodeAllowed": false,
+  "recommendedUse": [
+    "architecture",
+    "patterns",
+    "testing ideas"
+  ],
+  "warning": "Do not copy directly unless project policy allows it."
+}

@@ -7,9 +7,22 @@ import { buildProposal, formatProposal } from '../engines/proposalEngine.js';
 import { saveLesson, hasPriorLessons } from '../memory/selfLearning.js';
 import { saveRunLog } from '../logger.js';
 import { readdirSync, existsSync } from 'fs';
+import { getAppVersion } from '../version.js';
+import { routeChat, routeChatEnsemble } from '../engines/aiRouter.js';
+import { getLibraryPath as getConfiguredLibraryPath } from '../storage/paths.js';
+import {
+  addRepo,
+  listRepos,
+  analyzeRepo,
+  scoreRepoCard,
+  digestRepo,
+  acceptRepo,
+} from '../repos/service.js';
+
+const APP_VERSION = getAppVersion();
 
 function getLibraryPath(): string {
-  return join(process.cwd(), 'brain-data', 'library');
+  return getConfiguredLibraryPath();
 }
 
 export interface MCPTool {
@@ -148,13 +161,117 @@ export const mcpTools: MCPTool[] = [
       const runCount = existsSync(runsPath) ? readdirSync(runsPath).filter((f) => f.endsWith('.json')).length : 0;
 
       return {
-        version: '1.0.0',
+        version: APP_VERSION,
         status: 'ok',
         books: bookCount,
         runs: runCount,
         hasPriorLessons: hasPriorLessons(),
         categories: categoryStats,
       };
+    },
+  },
+
+  {
+    name: 'brain_repo_add',
+    description: 'Add a GitHub repo into quarantine and create metadata',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string' },
+        topic: { type: 'string' },
+      },
+      required: ['url'],
+    },
+    execute: async (input) => addRepo(String(input.url), String(input.topic ?? 'general')),
+  },
+
+  {
+    name: 'brain_repo_list',
+    description: 'List all tracked repos with status/topic',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+    execute: async () => listRepos(),
+  },
+
+  {
+    name: 'brain_repo_analyze',
+    description: 'Analyze repo safely (metadata/license/risk/score/summary)',
+    inputSchema: {
+      type: 'object',
+      properties: { repoId: { type: 'string' } },
+      required: ['repoId'],
+    },
+    execute: async (input) => analyzeRepo(String(input.repoId)),
+  },
+
+  {
+    name: 'brain_repo_score',
+    description: 'Get repo scorecard',
+    inputSchema: {
+      type: 'object',
+      properties: { repoId: { type: 'string' } },
+      required: ['repoId'],
+    },
+    execute: async (input) => {
+      const score = scoreRepoCard(String(input.repoId));
+      return score ?? { error: 'Repo not found' };
+    },
+  },
+
+  {
+    name: 'brain_repo_digest',
+    description: 'Create safe repo digest',
+    inputSchema: {
+      type: 'object',
+      properties: { repoId: { type: 'string' } },
+      required: ['repoId'],
+    },
+    execute: async (input) => digestRepo(String(input.repoId)),
+  },
+
+  {
+    name: 'brain_repo_accept',
+    description: 'Accept analyzed repo into trusted folder',
+    inputSchema: {
+      type: 'object',
+      properties: { repoId: { type: 'string' } },
+      required: ['repoId'],
+    },
+    execute: async (input) => acceptRepo(String(input.repoId)),
+  },
+
+  {
+    name: 'brain_chat',
+    description: 'Ask BuilderBrain chat backend directly.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+      },
+      required: ['message'],
+    },
+    execute: async (input) => {
+      const message = String(input.message ?? '');
+      const result = await routeChat([{ role: 'user', content: message }]);
+      return result;
+    },
+  },
+
+  {
+    name: 'brain_chat_ensemble',
+    description: 'Run 3-AI BuilderBrain debate and return merged answer + members.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        count: { type: 'number' },
+      },
+      required: ['message'],
+    },
+    execute: async (input) => {
+      const message = String(input.message ?? '');
+      const count = Number(input.count ?? 3);
+      const result = await routeChatEnsemble([{ role: 'user', content: message }], { count });
+      return result;
     },
   },
 ];
