@@ -91,6 +91,9 @@ export interface Config {
     most_starred: number
     fresh: number
     safe: boolean
+    target_books_min: number
+    cycle_repo_budget: number
+    use_ai_curation: boolean
   }
   daily_trends: {
     enabled: boolean
@@ -144,4 +147,13 @@ export const api = {
   acceptRepo: (id: string) => post<{ success: boolean; message: string }>(`/repos/${encodeURIComponent(id)}/accept`, {}),
   importMarkdown: (payload: { markdown?: string; filePath?: string; topic?: string; autoAnalyze?: boolean }) =>
     post<{ success: boolean; message: string; imported: string[]; failed: Array<{ url: string; error: string }> }>('/library/import-markdown', payload),
+  autoExpandStatus: () => get<{
+    enabled: boolean
+    intervalMinutes: number
+    targetBooksMin: number
+    currentMiniBooks: number
+    lastRunAt: string | null
+    lastSummary: string
+  }>('/library/auto-expand/status'),
+  runAutoExpandNow: () => post<unknown>('/library/auto-expand/run', {}),
 }

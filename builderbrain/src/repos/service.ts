@@ -26,6 +26,7 @@ import { scoreRepo } from './score.js';
 import { buildRepoSummaryMarkdown } from './summary.js';
 import { generateSafeDigest } from './digest.js';
 import { ensureCategoriesFile, findCategory } from './categories.js';
+import { routeChatEnsemble } from '../engines/aiRouter.js';
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -268,6 +269,8 @@ export async function expandLibraryByCategory(opts: {
   fresh: number;
   safe?: boolean;
   autoAnalyze?: boolean;
+  repoBudget?: number;
+  useAiCuration?: boolean;
 }): Promise<{ success: boolean; message: string; added: string[]; reportPath: string }> {
   ensureRepoStructure();
   ensureCategoriesFile();
@@ -294,14 +297,19 @@ export async function expandLibraryByCategory(opts: {
   for (const repo of merged) {
     if (!dedup.has(repo.full_name)) dedup.set(repo.full_name, repo);
   }
-  const selected = [...dedup.values()]
+  let selected = [...dedup.values()]
     .sort((a, b) => b.stargazers_count - a.stargazers_count)
     .slice(0, Math.max(opts.mostStarred, opts.fresh));
+
+  if (opts.useAiCuration && selected.length > 1) {
+    const curated = await aiCurateCandidates(category.id, selected);
+    if (curated.length > 0) selected = curated;
+  }
 
   writeJson(join(root, 'selected-repos.json'), selected);
 
   const added: string[] = [];
-  const repoLimit = opts.safe ? 5 : 10;
+  const repoLimit = Math.max(1, opts.repoBudget ?? (opts.safe ? 5 : 10));
   for (const repo of selected.slice(0, repoLimit)) {
     const add = addRepo(repo.html_url, category.id);
     if (add.success) {
@@ -334,6 +342,37 @@ Safely added in this run: ${added.length}
     added,
     reportPath,
   };
+}
+
+async function aiCurateCandidates(categoryId: string, candidates: GitHubSearchRepo[]): Promise<GitHubSearchRepo[]> {
+  const short = candidates.slice(0, 20);
+  const prompt = `Category: ${categoryId}
+Select best repos for practical engineering learning. Prefer active docs/testing/security signals from description and naming.
+Return strict JSON with shape: {"order":["owner/repo", ...]}.
+Candidates:
+${short.map((r) => `- ${r.full_name} | stars=${r.stargazers_count} | pushed=${r.pushed_at}`).join('\n')}
+`;
+  try {
+    const result = await routeChatEnsemble([{ role: 'user', content: prompt }], { count: 3 });
+    const text = result.final.text;
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return candidates;
+    const parsed = JSON.parse(match[0]) as { order?: string[] };
+    const order = parsed.order ?? [];
+    if (!Array.isArray(order) || order.length === 0) return candidates;
+    const byName = new Map(candidates.map((c) => [c.full_name.toLowerCase(), c]));
+    const ranked: GitHubSearchRepo[] = [];
+    for (const name of order) {
+      const found = byName.get(String(name).toLowerCase());
+      if (found && !ranked.includes(found)) ranked.push(found);
+    }
+    for (const c of candidates) {
+      if (!ranked.includes(c)) ranked.push(c);
+    }
+    return ranked;
+  } catch {
+    return candidates;
+  }
 }
 
 export function compressCategoryMiniBook(categoryId: string): { success: boolean; outputPath: string; message: string } {

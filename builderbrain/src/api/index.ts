@@ -31,6 +31,7 @@ import {
   importReposFromMarkdown,
 } from '../repos/service.js';
 import { startAutoExpandWorker } from '../repos/autoExpand.js';
+import { getAutoExpandStatus, runAutoExpandNow } from '../repos/autoExpand.js';
 
 const app = new Hono();
 const APP_VERSION = getAppVersion();
@@ -44,6 +45,7 @@ const WRITE_ACTION_ROUTES = new Set([
   '/library/expand',
   '/library/compress',
   '/library/import-markdown',
+  '/library/auto-expand/run',
 ]);
 const WRITE_ACTION_ROUTE_PATTERNS = [
   /^\/repos\/[^/]+\/analyze$/,
@@ -366,6 +368,15 @@ app.post('/library/import-markdown', async (c) => {
     autoAnalyze: body.autoAnalyze ?? true,
   });
   return c.json(result, result.success ? 200 : 400);
+});
+
+app.get('/library/auto-expand/status', (c) => {
+  return c.json(getAutoExpandStatus());
+});
+
+app.post('/library/auto-expand/run', async (c) => {
+  const status = await runAutoExpandNow();
+  return c.json(status);
 });
 
 // ── Chat ──────────────────────────────────────────────────────────────────────

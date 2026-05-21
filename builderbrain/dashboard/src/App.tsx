@@ -999,6 +999,9 @@ function SettingsMode() {
                   most_starred: config.auto_expand?.most_starred ?? 10,
                   fresh: config.auto_expand?.fresh ?? 5,
                   safe: config.auto_expand?.safe ?? true,
+                  target_books_min: config.auto_expand?.target_books_min ?? 100,
+                  cycle_repo_budget: config.auto_expand?.cycle_repo_budget ?? 6,
+                  use_ai_curation: config.auto_expand?.use_ai_curation ?? true,
                 },
               })}
             />
@@ -1020,6 +1023,9 @@ function SettingsMode() {
                 most_starred: config.auto_expand?.most_starred ?? 10,
                 fresh: config.auto_expand?.fresh ?? 5,
                 safe: config.auto_expand?.safe ?? true,
+                target_books_min: config.auto_expand?.target_books_min ?? 100,
+                cycle_repo_budget: config.auto_expand?.cycle_repo_budget ?? 6,
+                use_ai_curation: config.auto_expand?.use_ai_curation ?? true,
                 interval_minutes: Number(e.target.value),
               },
             })}
@@ -1038,11 +1044,94 @@ function SettingsMode() {
                 most_starred: config.auto_expand?.most_starred ?? 10,
                 fresh: config.auto_expand?.fresh ?? 5,
                 safe: config.auto_expand?.safe ?? true,
+                target_books_min: config.auto_expand?.target_books_min ?? 100,
+                cycle_repo_budget: config.auto_expand?.cycle_repo_budget ?? 6,
+                use_ai_curation: config.auto_expand?.use_ai_curation ?? true,
                 categories: e.target.value.split(',').map((x) => x.trim()).filter(Boolean),
               },
             })}
           />
         </div>
+        <div className="form-group">
+          <label className="form-label">Target Mini Books</label>
+          <input
+            className="form-input"
+            type="number"
+            min={20}
+            value={config.auto_expand?.target_books_min ?? 100}
+            onChange={(e) => setConfig({
+              ...config,
+              auto_expand: {
+                enabled: config.auto_expand?.enabled ?? false,
+                interval_minutes: config.auto_expand?.interval_minutes ?? 180,
+                categories: config.auto_expand?.categories ?? ['ai-agent-frameworks'],
+                most_starred: config.auto_expand?.most_starred ?? 10,
+                fresh: config.auto_expand?.fresh ?? 5,
+                safe: config.auto_expand?.safe ?? true,
+                cycle_repo_budget: config.auto_expand?.cycle_repo_budget ?? 6,
+                use_ai_curation: config.auto_expand?.use_ai_curation ?? true,
+                target_books_min: Number(e.target.value),
+              },
+            })}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Cycle Repo Budget</label>
+          <input
+            className="form-input"
+            type="number"
+            min={1}
+            value={config.auto_expand?.cycle_repo_budget ?? 6}
+            onChange={(e) => setConfig({
+              ...config,
+              auto_expand: {
+                enabled: config.auto_expand?.enabled ?? false,
+                interval_minutes: config.auto_expand?.interval_minutes ?? 180,
+                categories: config.auto_expand?.categories ?? ['ai-agent-frameworks'],
+                most_starred: config.auto_expand?.most_starred ?? 10,
+                fresh: config.auto_expand?.fresh ?? 5,
+                safe: config.auto_expand?.safe ?? true,
+                target_books_min: config.auto_expand?.target_books_min ?? 100,
+                use_ai_curation: config.auto_expand?.use_ai_curation ?? true,
+                cycle_repo_budget: Number(e.target.value),
+              },
+            })}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Use 3-AI Curation</label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={Boolean(config.auto_expand?.use_ai_curation)}
+              onChange={(e) => setConfig({
+                ...config,
+                auto_expand: {
+                  enabled: config.auto_expand?.enabled ?? false,
+                  interval_minutes: config.auto_expand?.interval_minutes ?? 180,
+                  categories: config.auto_expand?.categories ?? ['ai-agent-frameworks'],
+                  most_starred: config.auto_expand?.most_starred ?? 10,
+                  fresh: config.auto_expand?.fresh ?? 5,
+                  safe: config.auto_expand?.safe ?? true,
+                  target_books_min: config.auto_expand?.target_books_min ?? 100,
+                  cycle_repo_budget: config.auto_expand?.cycle_repo_budget ?? 6,
+                  use_ai_curation: e.target.checked,
+                },
+              })}
+            />
+            <span className="slider" />
+          </label>
+        </div>
+        <button
+          className="btn btn-ghost"
+          onClick={async () => {
+            await api.runAutoExpandNow()
+            const s = await api.autoExpandStatus()
+            alert(`Auto-expand: books=${s.currentMiniBooks}/${s.targetBooksMin}, last=${s.lastRunAt ?? 'n/a'}, ${s.lastSummary}`)
+          }}
+        >
+          Run Auto Expand Now
+        </button>
       </section>
 
       <section style={{ marginBottom: 32 }}>

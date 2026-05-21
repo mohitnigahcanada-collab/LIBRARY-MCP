@@ -25,13 +25,16 @@ export interface Config {
   ensemble_backend_names?: string[]
   library_path_override?: string
   warehouse_path_override?: string
-  auto_expand?: {
+  auto_expand: {
     enabled: boolean
     interval_minutes: number
     categories: string[]
     most_starred: number
     fresh: number
     safe: boolean
+    target_books_min: number
+    cycle_repo_budget: number
+    use_ai_curation: boolean
   }
   auto_reorder_backends?: boolean
   health_monitor_enabled?: boolean
@@ -64,12 +67,24 @@ const DEFAULT_CONFIG: Config = {
   library_path_override: undefined,
   warehouse_path_override: undefined,
   auto_expand: {
-    enabled: false,
-    interval_minutes: 180,
-    categories: ['ai-agent-frameworks'],
+    enabled: true,
+    interval_minutes: 30,
+    categories: [
+      'ai-agent-frameworks',
+      'docs-devex',
+      'cli-terminal-tools',
+      'ai-coding-agents',
+      'backend-engineering',
+      'frontend-engineering',
+      'security-engineering',
+      'testing-quality',
+    ],
     most_starred: 10,
     fresh: 5,
     safe: true,
+    target_books_min: 100,
+    cycle_repo_budget: 6,
+    use_ai_curation: true,
   },
   auto_reorder_backends: false,
   health_monitor_enabled: false,
@@ -92,7 +107,25 @@ export function loadConfig(): Config {
   const configPath = getConfigPath()
   if (!existsSync(configPath)) return { ...DEFAULT_CONFIG }
   try {
-    return { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(configPath, 'utf-8')) }
+    const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as Partial<Config>
+    const parsedAuto = (parsed.auto_expand ?? {}) as Partial<Config['auto_expand']>
+    return {
+      ...DEFAULT_CONFIG,
+      ...parsed,
+      alerts: { ...DEFAULT_CONFIG.alerts, ...(parsed.alerts ?? {}) },
+      daily_trends: { ...DEFAULT_CONFIG.daily_trends, ...(parsed.daily_trends ?? {}) },
+      auto_expand: {
+        enabled: parsedAuto.enabled ?? DEFAULT_CONFIG.auto_expand.enabled,
+        interval_minutes: parsedAuto.interval_minutes ?? DEFAULT_CONFIG.auto_expand.interval_minutes,
+        categories: parsedAuto.categories ?? DEFAULT_CONFIG.auto_expand.categories,
+        most_starred: parsedAuto.most_starred ?? DEFAULT_CONFIG.auto_expand.most_starred,
+        fresh: parsedAuto.fresh ?? DEFAULT_CONFIG.auto_expand.fresh,
+        safe: parsedAuto.safe ?? DEFAULT_CONFIG.auto_expand.safe,
+        target_books_min: parsedAuto.target_books_min ?? DEFAULT_CONFIG.auto_expand.target_books_min,
+        cycle_repo_budget: parsedAuto.cycle_repo_budget ?? DEFAULT_CONFIG.auto_expand.cycle_repo_budget,
+        use_ai_curation: parsedAuto.use_ai_curation ?? DEFAULT_CONFIG.auto_expand.use_ai_curation,
+      },
+    }
   } catch {
     return { ...DEFAULT_CONFIG }
   }
