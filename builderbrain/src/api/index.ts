@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { join, relative, resolve } from 'path';
+import { join, resolve } from 'path';
 import { readdirSync, existsSync, readFileSync, mkdirSync } from 'fs';
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { classifyDomains } from '../engines/classifier.js';
 import { selectBookStack } from '../engines/bookRouter.js';
 import { assessRisk, assessConfidence } from '../engines/riskConfidence.js';
@@ -14,6 +15,8 @@ import { saveRunLog, listRunLogs, getRunLog } from '../logger.js';
 import { loadConfig, saveConfig, mergeConfigUpdate, type Config } from '../config/manager.js';
 import { routeChat, type ChatMessage } from '../engines/aiRouter.js';
 import { sendAlert } from '../engines/alerts.js';
+import { delegateTask } from '../engines/orchestrator.js';
+import { createSnapshot, undoToSnapshot } from '../engines/timeTravel.js';
 
 const app = new Hono();
 const VERSION = '2.0.0';
@@ -32,6 +35,20 @@ app.use('/*', async (c, next) => {
 
 app.options('/*', (c) => new Response('', { status: 204 }));
 
+// Optional token authentication — activated when BUILDERBRAIN_API_TOKEN env var is set
+app.use('/*', async (c, next) => {
+  // Skip auth for health check and OPTIONS
+  if (c.req.method === 'OPTIONS' || c.req.path === '/health') return next();
+  const apiToken = process.env.BUILDERBRAIN_API_TOKEN;
+  if (!apiToken) return next(); // Token auth disabled — local-only usage
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token || token !== apiToken) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  return next();
+});
+
 function getLibraryPath(): string {
   return join(process.cwd(), 'brain-data', 'library');
 }
@@ -39,8 +56,8 @@ function getLibraryPath(): string {
 function resolveInside(basePath: string, requestedPath: string): string | null {
   const base = resolve(basePath);
   const target = resolve(base, requestedPath);
-  const rel = relative(base, target);
-  if (rel.startsWith('..') || rel === '..' || resolve(rel) === rel) return null;
+  // Must be strictly inside base (not equal to base itself, as that's a directory)
+  if (!target.startsWith(base + '/') && !target.startsWith(base + '\\')) return null;
   return target;
 }
 
@@ -94,9 +111,10 @@ app.get('/books', (c) => {
 app.get('/book', (c) => {
   const bookPath = c.req.query('path');
   if (!bookPath) return c.json({ error: 'Missing ?path= query param' }, 400);
+  if (!bookPath.endsWith('.md')) return c.json({ error: 'Invalid book path' }, 400);
 
   const resolved = resolveInside(getLibraryPath(), bookPath);
-  if (!resolved || !bookPath.endsWith('.md')) return c.json({ error: 'Invalid book path' }, 400);
+  if (!resolved) return c.json({ error: 'Invalid book path' }, 400);
   if (!existsSync(resolved)) return c.json({ error: 'Book not found' }, 404);
 
   const content = readFileSync(resolved, 'utf-8');
@@ -210,6 +228,31 @@ app.post('/learn', async (c) => {
   return c.json({ success: true, message: 'Lesson saved to self-learning memory' });
 });
 
+// ── V3 Agentic Ops ────────────────────────────────────────────────────────────
+
+app.post('/delegate', async (c) => {
+  const body = await c.req.json<{ task: string; roles: string[] }>();
+  if (!body?.task || !body?.roles?.length) {
+    return c.json({ error: 'Missing task or roles' }, 400);
+  }
+  const plan = delegateTask(body.task, body.roles);
+  return c.json({ success: true, orchestrationPlan: plan });
+});
+
+app.post('/snapshot', async (c) => {
+  const body = await c.req.json<{ message: string }>();
+  if (!body?.message) return c.json({ error: 'Missing message' }, 400);
+  const result = await createSnapshot(body.message);
+  return c.json(result, result.success ? 200 : 500);
+});
+
+app.post('/undo', async (c) => {
+  const body = await c.req.json<{ snapshotId: string }>();
+  if (!body?.snapshotId) return c.json({ error: 'Missing snapshotId' }, 400);
+  const success = await undoToSnapshot(body.snapshotId);
+  return c.json({ success, message: success ? 'Reverted successfully' : 'Undo failed' }, success ? 200 : 500);
+});
+
 // ── Repo clone ────────────────────────────────────────────────────────────────
 
 function getRepoBrainPath(): string {
@@ -241,7 +284,9 @@ function parseGitHubRepoUrl(url: string): { cleanUrl: string; repoName: string }
   };
 }
 
-function cloneRepo(url: string): { success: boolean; repoName: string; path: string; message: string } {
+const execFileAsync = promisify(execFile);
+
+async function cloneRepo(url: string): Promise<{ success: boolean; repoName: string; path: string; message: string }> {
   const parsed = parseGitHubRepoUrl(url);
   if (!parsed) {
     return { success: false, repoName: '', path: '', message: 'Only direct GitHub repository URLs are supported' };
@@ -258,7 +303,7 @@ function cloneRepo(url: string): { success: boolean; repoName: string; path: str
   }
 
   try {
-    execFileSync('git', ['clone', '--depth=1', cleanUrl, targetPath], { timeout: 120_000, stdio: 'pipe' });
+    await execFileAsync('git', ['clone', '--depth=1', cleanUrl, targetPath], { timeout: 120_000 });
     return { success: true, repoName, path: targetPath, message: `Cloned ${repoName} → brain-data/big-bible/repos/${repoName}` };
   } catch (err: any) {
     return { success: false, repoName, path: targetPath, message: `Clone failed: ${err.message ?? String(err)}` };
@@ -269,7 +314,7 @@ app.post('/repo/clone', async (c) => {
   const body = await c.req.json<{ url: string }>();
   if (!body?.url) return c.json({ error: 'Missing url' }, 400);
   if (!parseGitHubRepoUrl(body.url)) return c.json({ error: 'Only direct GitHub repository URLs are supported' }, 400);
-  const result = cloneRepo(body.url);
+  const result = await cloneRepo(body.url);
   if (result.success) {
     sendAlert(`🧠 <b>BuilderBrain</b>\nRepo cloned: <code>${result.repoName}</code>\nSaved to: brain-data/big-bible/repos/${result.repoName}`).catch(() => {});
   }
@@ -312,7 +357,7 @@ app.post('/chat', async (c) => {
   const githubUrl = lastMsg.match(/https?:\/\/(?:www\.)?github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?/i)?.[0];
   const cloneIntent = /\b(clone|download|add|get|fetch|grab|save|pull)\b/i.test(lastMsg);
   if (githubUrl && cloneIntent) {
-    const result = cloneRepo(githubUrl);
+    const result = await cloneRepo(githubUrl);
     cloneNote = `\n\nACTION TAKEN: ${result.message}`;
     if (result.success) {
       cloneNote += `\nRepo is now saved at brain-data/big-bible/repos/${result.repoName} on the user's machine.`;

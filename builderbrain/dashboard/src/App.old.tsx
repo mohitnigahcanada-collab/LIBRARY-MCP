@@ -1,57 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { api, type ChatMessage, type StatusResponse, type RunLog, type Config, type AIBackend, type TrendingRepo, type DiscoveredBook, type EvolutionInsights, type RadarSchedule } from './api'
 
-type Mode = 'telemetry' | 'agent' | 'chat' | 'research' | 'library' | 'ops' | 'discover' | 'settings'
-
-// ── Telemetry Hook ────────────────────────────────────────────────────────────
-
-export interface TelemetryLog {
-  timestamp: string;
-  source: string;
-  message: string;
-  data?: any;
-}
-
-export function useTelemetry(url = 'ws://localhost:8080') {
-  const [logs, setLogs] = useState<TelemetryLog[]>([]);
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-
-  useEffect(() => {
-    const connect = () => {
-      const ws = new WebSocket(url);
-      wsRef.current = ws;
-      ws.onopen = () => setConnected(true);
-      ws.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data);
-          setLogs((prev) => [...prev, parsed].slice(-100));
-        } catch (e) {}
-      };
-      ws.onclose = () => {
-        setConnected(false);
-        setTimeout(connect, 2000);
-      };
-      ws.onerror = () => ws.close();
-    };
-    connect();
-    return () => { if (wsRef.current) wsRef.current.close(); };
-  }, [url]);
-
-  return { logs, connected };
-}
+type Mode = 'agent' | 'chat' | 'research' | 'library' | 'ops' | 'discover' | 'settings'
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
 function Sidebar({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
   const modes: Array<{ id: Mode; icon: string; label: string }> = [
-    { id: 'telemetry', icon: '📡', label: 'Live Telemetry' },
-    { id: 'ops', icon: '⚡', label: 'Agent Ops (V3)' },
     { id: 'agent', icon: '🤖', label: 'Agent' },
     { id: 'chat', icon: '💬', label: 'Chat' },
     { id: 'research', icon: '🔍', label: 'Research' },
     { id: 'library', icon: '📚', label: 'Library' },
     { id: 'discover', icon: '🌟', label: 'Discover' },
+    { id: 'ops', icon: '📊', label: 'Ops' },
   ]
   return (
     <div className="sidebar">
@@ -59,7 +20,7 @@ function Sidebar({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) 
         <span>🧠</span>
         <div>
           <div>BuilderBrain</div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>v3.0.0</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>v2.0.0</div>
         </div>
       </div>
 
@@ -566,113 +527,58 @@ function LibraryMode() {
   )
 }
 
-// ── Telemetry Mode ──────────────────────────────────────────────────────────────
-
-function TelemetryMode() {
-  const { logs, connected } = useTelemetry();
-
-  return (
-    <div className="content">
-      <h1>📡 Live Telemetry</h1>
-      <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>
-        Real-time thought stream from the BuilderBrain Multi-Agent OS.
-      </p>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-        <div style={{ 
-          width: 8, height: 8, borderRadius: '50%', 
-          background: connected ? 'var(--green)' : 'var(--red)',
-          boxShadow: connected ? '0 0 10px var(--green)' : 'none'
-        }} />
-        <span style={{ fontSize: 14, fontWeight: 500, color: connected ? 'var(--green)' : 'var(--red)' }}>
-          {connected ? 'WebSocket Connected (Port 8080)' : 'Disconnected (Retrying...)'}
-        </span>
-      </div>
-
-      <div className="telemetry-container glass-panel" style={{ background: '#0D1117', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', height: '400px', overflowY: 'auto', fontFamily: 'var(--mono)', fontSize: '13px' }}>
-        {logs.length === 0 && <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Waiting for agent thoughts...</div>}
-        {logs.map((log, i) => (
-          <div key={i} style={{ marginBottom: '8px', lineHeight: '1.5' }}>
-            <span style={{ color: '#6E7681', marginRight: '12px' }}>[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-            <span style={{ color: 'var(--accent)', fontWeight: 500, marginRight: '12px' }}>[{log.source}]</span>
-            <span style={{ color: '#C9D1D9' }}>{log.message}</span>
-            {log.data && (
-              <pre style={{ color: 'var(--text-muted)', marginTop: 4, marginLeft: 16 }}>
-                {JSON.stringify(log.data, null, 2)}
-              </pre>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Ops Mode ──────────────────────────────────────────────────────────────────
 
-function OpsMode() {
-  const [task, setTask] = useState('');
-  const [snapshotMsg, setSnapshotMsg] = useState('');
-  const [undoId, setUndoId] = useState('');
-  const [loading, setLoading] = useState(false);
+function OpsMode({ status }: { status: StatusResponse | null }) {
+  const [runs, setRuns] = useState<RunLog[]>([])
 
-  const handleDelegate = async () => {
-    if (!task) return;
-    setLoading(true);
-    try {
-      const res = await api.delegate(task, ['Frontend Specialist', 'Backend Architect']);
-      alert(`Delegated! Plan: ${JSON.stringify(res.orchestrationPlan, null, 2)}`);
-    } catch (e: any) { alert(`Error: ${e.message}`); }
-    setLoading(false);
-  };
+  useEffect(() => {
+    api.runs(20).then(setRuns).catch(() => {})
+  }, [])
 
-  const handleSnapshot = async () => {
-    if (!snapshotMsg) return;
-    setLoading(true);
-    try {
-      const res = await api.snapshot(snapshotMsg);
-      alert(res.success ? `Snapshot created: ${res.snapshotId}` : `Error: ${res.message}`);
-    } catch (e: any) { alert(`Error: ${e.message}`); }
-    setLoading(false);
-  };
-
-  const handleUndo = async () => {
-    if (!undoId) return;
-    setLoading(true);
-    try {
-      const res = await api.undo(undoId);
-      alert(res.success ? 'Reverted successfully!' : `Error: ${res.message}`);
-    } catch (e: any) { alert(`Error: ${e.message}`); }
-    setLoading(false);
-  };
+  const riskBadge = (r: string) => {
+    const map: Record<string, string> = { Low: 'badge-low', Medium: 'badge-medium', High: 'badge-high', Critical: 'badge-critical' }
+    return map[r] ?? 'badge-blue'
+  }
 
   return (
-    <div className="content">
-      <h1>⚡ Agent Ops (V3)</h1>
-      <p style={{ color: 'var(--text-muted)' }}>Trigger massive multi-agent workflows, manual snapshots, and time-travel undos.</p>
-      
-      <div className="stats-grid" style={{ marginTop: '24px' }}>
-        <div className="stat-card">
-          <div className="stat-label">🚀 Orchestrator</div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8, marginBottom: 16 }}>Hire specialized sub-agents to execute parts of a massive task in parallel.</p>
-          <input className="input" placeholder="E.g., Build a full-stack Next.js app" value={task} onChange={e => setTask(e.target.value)} style={{ width: '100%', marginBottom: 12 }} />
-          <button className="btn primary" onClick={handleDelegate} disabled={loading}>Delegate Task</button>
-        </div>
+    <div className="content ops-container">
+      <h2>📊 Ops</h2>
 
-        <div className="stat-card">
-          <div className="stat-label">📸 Git Snapshot</div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8, marginBottom: 16 }}>Create a hidden background snapshot of the codebase before you let an agent rip.</p>
-          <input className="input" placeholder="Snapshot reason (e.g., pre-refactor)" value={snapshotMsg} onChange={e => setSnapshotMsg(e.target.value)} style={{ width: '100%', marginBottom: 12 }} />
-          <button className="btn primary" onClick={handleSnapshot} disabled={loading}>Create Snapshot</button>
+      {status && (
+        <div className="stats-grid" style={{ marginBottom: 24 }}>
+          <div className="stat-card">
+            <div className="stat-label">Books</div>
+            <div className="stat-value">{status.books}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Runs</div>
+            <div className="stat-value">{status.runs}</div>
+          </div>
+          {Object.entries(status.categories).map(([cat, count]) => (
+            <div key={cat} className="stat-card">
+              <div className="stat-label">{cat}</div>
+              <div className="stat-value">{count}</div>
+            </div>
+          ))}
         </div>
+      )}
 
-        <div className="stat-card">
-          <div className="stat-label">⏪ Time-Travel Undo</div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8, marginBottom: 16 }}>Did an agent hallucinate and break everything? Roll it back instantly.</p>
-          <input className="input" placeholder="Snapshot ID (e.g., 5b2a9d8)" value={undoId} onChange={e => setUndoId(e.target.value)} style={{ width: '100%', marginBottom: 12 }} />
-          <button className="btn primary" onClick={handleUndo} disabled={loading}>Undo to Snapshot</button>
+      <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--text-muted)' }}>Recent Runs</h3>
+      {runs.length === 0 && <div className="empty">No runs yet</div>}
+      {runs.map((run) => (
+        <div key={run.id} className="run-item">
+          <div className="run-item-header">
+            <span className="run-command">{run.command}</span>
+            <span className={`badge ${riskBadge(run.risk)}`}>{run.risk}</span>
+            {run.detectedDomains.slice(0, 2).map((d) => (
+              <span key={d} className="tag">{d}</span>
+            ))}
+          </div>
+          <div className="run-summary">{run.summary}</div>
+          <div className="run-meta">{new Date(run.timestamp).toLocaleString()} · {run.booksUsed.length} books</div>
         </div>
-      </div>
+      ))}
     </div>
   )
 }

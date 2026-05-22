@@ -129,4 +129,9 @@ export const api = {
   applyEvolution: () => post<{ success: boolean; changes: string }>('/discover/evolution/apply', {}),
   getRadarSchedule: () => get<RadarSchedule>('/discover/radar'),
   toggleRadar: (enabled: boolean) => post<{ success: boolean }>('/discover/radar/toggle', { enabled }),
+  
+  // V3 Agentic Ops
+  delegate: (task: string, roles: string[]) => post<{ success: boolean; orchestrationPlan: any }>('/delegate', { task, roles }),
+  snapshot: (message: string) => post<{ success: boolean; snapshotId: string; message: string }>('/snapshot', { message }),
+  undo: (snapshotId: string) => post<{ success: boolean; message: string }>('/undo', { snapshotId }),
 }

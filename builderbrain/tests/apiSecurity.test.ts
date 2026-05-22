@@ -93,4 +93,38 @@ describe('api security boundaries', () => {
     expect(saveResponse.status).toBe(200);
     expect(JSON.parse(readFileSync(configPath, 'utf-8')).ai_backends[0].apiKey).toBe('test-key-value');
   });
+
+  describe('token authentication middleware', () => {
+    const origEnv = process.env.BUILDERBRAIN_API_TOKEN;
+    
+    afterEach(() => {
+      process.env.BUILDERBRAIN_API_TOKEN = origEnv;
+    });
+
+    it('allows requests without token when BUILDERBRAIN_API_TOKEN is unset', async () => {
+      delete process.env.BUILDERBRAIN_API_TOKEN;
+      const response = await app.request('/config');
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects unauthenticated requests when BUILDERBRAIN_API_TOKEN is set', async () => {
+      process.env.BUILDERBRAIN_API_TOKEN = 'secret123';
+      const response = await app.request('/config');
+      expect(response.status).toBe(401);
+    });
+
+    it('allows authenticated requests when BUILDERBRAIN_API_TOKEN is set', async () => {
+      process.env.BUILDERBRAIN_API_TOKEN = 'secret123';
+      const response = await app.request('/config', {
+        headers: { 'Authorization': 'Bearer secret123' }
+      });
+      expect(response.status).toBe(200);
+    });
+
+    it('allows /health requests even when BUILDERBRAIN_API_TOKEN is set', async () => {
+      process.env.BUILDERBRAIN_API_TOKEN = 'secret123';
+      const response = await app.request('/health');
+      expect(response.status).toBe(200);
+    });
+  });
 });
